@@ -1,5 +1,6 @@
 ﻿package com.hadify.NumberMerge2048
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -44,6 +45,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,12 +55,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.random.Random
+import java.util.Calendar
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -152,15 +158,556 @@ private data class MoveResult(
     val hasChanged: Boolean,
 )
 
+private enum class ChallengeTier(val label: String) {
+    BEGINNER("Beginner"),
+    INTERMEDIATE("Inter."),
+    ADVANCED("Advanced"),
+    EXPERT("Expert"),
+}
+
+private data class ChallengeStageDefinition(
+    val id: String,
+    val title: String,
+    val description: String,
+    val targetScore: Int? = null,
+    val targetTile: Int? = null,
+) {
+    init {
+        require(targetScore != null || targetTile != null) {
+            "Challenge stage must define at least one target"
+        }
+    }
+}
+
+private data class DailyChallengeDefinition(
+    val id: String,
+    val title: String,
+    val description: String,
+    val tier: ChallengeTier,
+    val rewardCoins: Int,
+    val boardSize: Int,
+    val chainStages: List<ChallengeStageDefinition>,
+    val maxMoves: Int? = null,
+    val maxBombUses: Int? = null,
+    val maxPowerUpUses: Int? = null,
+    val disallowPowerUps: Boolean = false,
+)
+
+private class DailyChallengeState(
+    val definition: DailyChallengeDefinition,
+    initiallyUnlocked: Boolean,
+) {
+    var unlocked by mutableStateOf(initiallyUnlocked)
+    var completed by mutableStateOf(false)
+    var claimed by mutableStateOf(false)
+    var bestProgress by mutableIntStateOf(0)
+    var statusNote by mutableStateOf("Not started")
+}
+
+private data class ChallengeUiState(
+    val id: String,
+    val title: String,
+    val description: String,
+    val tierLabel: String,
+    val rewardCoins: Int,
+    val progressCurrent: Int,
+    val progressTarget: Int,
+    val stageText: String,
+    val progressText: String,
+    val statusText: String,
+    val isCompleted: Boolean,
+    val isFailed: Boolean,
+)
+
+private class ActiveChallenge(private val definition: DailyChallengeDefinition) {
+    private val stages = definition.chainStages
+    private var currentStageIndex = 0
+
+    var movesUsed = 0
+        private set
+    var bombsUsed = 0
+        private set
+    var powerUpsUsed = 0
+        private set
+    var completed = false
+        private set
+    var failed = false
+        private set
+    var failureReason: String? = null
+        private set
+    var bestProgressToken = 0
+        private set
+
+    fun reset() {
+        currentStageIndex = 0
+        movesUsed = 0
+        bombsUsed = 0
+        powerUpsUsed = 0
+        completed = false
+        failed = false
+        failureReason = null
+        bestProgressToken = 0
+    }
+
+    fun onMove(score: Int, highestTile: Int) {
+        if (completed || failed) {
+            return
+        }
+
+        movesUsed += 1
+        val currentStage = stages[currentStageIndex]
+        val stagePercent = stageProgressPercent(currentStage, score, highestTile)
+        bestProgressToken = max(bestProgressToken, (currentStageIndex * 100) + stagePercent)
+        enforceRestrictions()
+        if (failed) {
+            return
+        }
+
+        if (isStageComplete(currentStage, score, highestTile)) {
+            currentStageIndex += 1
+            if (currentStageIndex >= stages.size) {
+                completed = true
+                bestProgressToken = stages.size * 100
+            } else {
+                bestProgressToken = max(bestProgressToken, currentStageIndex * 100)
+            }
+        }
+    }
+
+    fun onPowerUpUsed(isBomb: Boolean) {
+        if (completed || failed) {
+            return
+        }
+
+        powerUpsUsed += 1
+        if (isBomb) {
+            bombsUsed += 1
+        }
+
+        enforceRestrictions()
+    }
+
+    fun fail(reason: String) {
+        if (completed || failed) {
+            return
+        }
+        failed = true
+        failureReason = reason
+    }
+
+    fun toUiState(score: Int, highestTile: Int): ChallengeUiState {
+        val currentToken = when {
+            completed -> stages.size * 100
+            failed -> bestProgressToken
+            else -> {
+                val stage = stages[currentStageIndex]
+                (currentStageIndex * 100) + stageProgressPercent(stage, score, highestTile)
+            }
+        }
+        val best = max(currentToken, bestProgressToken)
+        val currentStageLabel = if (completed) {
+            "Stage ${stages.size}/${stages.size}"
+        } else {
+            "Stage ${currentStageIndex + 1}/${stages.size}: ${stages[currentStageIndex].title}"
+        }
+        val status = when {
+            completed -> "Completed"
+            failed -> "Failed: ${failureReason ?: "Rule broken"}"
+            else -> "In progress • ${currentStageIndex + 1}/${stages.size}"
+        }
+
+        val progressText = if (completed) {
+            "Chain complete"
+        } else {
+            stageProgressText(stages[currentStageIndex], score, highestTile)
+        }
+
+        return ChallengeUiState(
+            id = definition.id,
+            title = definition.title,
+            description = definition.description,
+            tierLabel = definition.tier.label,
+            rewardCoins = definition.rewardCoins,
+            progressCurrent = best,
+            progressTarget = stages.size * 100,
+            stageText = currentStageLabel,
+            progressText = progressText,
+            statusText = status,
+            isCompleted = completed,
+            isFailed = failed,
+        )
+    }
+
+    private fun isStageComplete(stage: ChallengeStageDefinition, score: Int, highestTile: Int): Boolean {
+        stage.targetScore?.let { required ->
+            if (score < required) return false
+        }
+        stage.targetTile?.let { required ->
+            if (highestTile < required) return false
+        }
+        return true
+    }
+
+    private fun stageProgressPercent(stage: ChallengeStageDefinition, score: Int, highestTile: Int): Int {
+        val pieces = mutableListOf<Float>()
+        stage.targetScore?.let { target ->
+            pieces += (score.toFloat() / target.toFloat()).coerceIn(0f, 1f)
+        }
+        stage.targetTile?.let { target ->
+            pieces += (highestTile.toFloat() / target.toFloat()).coerceIn(0f, 1f)
+        }
+        val average = if (pieces.isEmpty()) 0f else pieces.sum() / pieces.size
+        return (average * 100f).toInt()
+    }
+
+    private fun stageProgressText(stage: ChallengeStageDefinition, score: Int, highestTile: Int): String {
+        val parts = mutableListOf<String>()
+        stage.targetScore?.let { target ->
+            parts += "Score ${score.coerceAtMost(target)} / $target"
+        }
+        stage.targetTile?.let { target ->
+            parts += "Tile ${highestTile.coerceAtMost(target)} / $target"
+        }
+        return parts.joinToString(" + ")
+    }
+
+    private fun enforceRestrictions() {
+        if (failed || completed) {
+            return
+        }
+
+        if (definition.disallowPowerUps && powerUpsUsed > 0) {
+            fail("Power-ups are not allowed in this challenge")
+            return
+        }
+
+        definition.maxBombUses?.let { limit ->
+            if (bombsUsed > limit) {
+                fail("Bomb usage exceeded ($bombsUsed/$limit)")
+                return
+            }
+        }
+
+        definition.maxPowerUpUses?.let { limit ->
+            if (powerUpsUsed > limit) {
+                fail("Power-up limit exceeded ($powerUpsUsed/$limit)")
+                return
+            }
+        }
+
+        definition.maxMoves?.let { moveLimit ->
+            if (movesUsed > moveLimit) {
+                fail("Move limit exceeded ($movesUsed/$moveLimit)")
+            }
+        }
+    }
+}
+
+private fun bestProgressLabel(challenge: DailyChallengeState): String {
+    val definition = challenge.definition
+    val stageCount = definition.chainStages.size
+    if (challenge.completed) {
+        return "Chain $stageCount/$stageCount complete"
+    }
+    if (stageCount == 0) {
+        return "No chain configured"
+    }
+
+    val stageIndex = (challenge.bestProgress / 100).coerceIn(0, stageCount - 1)
+    val stagePercent = (challenge.bestProgress % 100).coerceIn(0, 100)
+    val completedStages = (challenge.bestProgress / 100).coerceIn(0, stageCount)
+    val stageTitle = definition.chainStages[stageIndex].title
+    return "Chain $completedStages/$stageCount • $stageTitle ($stagePercent%)"
+}
+
+private fun chainSummary(stages: List<ChallengeStageDefinition>): String {
+    return stages.joinToString(" -> ") { it.title }
+}
+
+private fun stage(
+    id: String,
+    title: String,
+    description: String,
+    score: Int? = null,
+    tile: Int? = null,
+): ChallengeStageDefinition {
+    return ChallengeStageDefinition(
+        id = id,
+        title = title,
+        description = description,
+        targetScore = score,
+        targetTile = tile,
+    )
+}
+
+private fun challenge(
+    id: String,
+    title: String,
+    description: String,
+    tier: ChallengeTier,
+    rewardCoins: Int,
+    boardSize: Int,
+    chainStages: List<ChallengeStageDefinition>,
+    maxMoves: Int? = null,
+    maxBombUses: Int? = null,
+    maxPowerUpUses: Int? = null,
+    disallowPowerUps: Boolean = false,
+): DailyChallengeDefinition {
+    return DailyChallengeDefinition(
+        id = id,
+        title = title,
+        description = description,
+        tier = tier,
+        rewardCoins = rewardCoins,
+        boardSize = boardSize,
+        chainStages = chainStages,
+        maxMoves = maxMoves,
+        maxBombUses = maxBombUses,
+        maxPowerUpUses = maxPowerUpUses,
+        disallowPowerUps = disallowPowerUps,
+    )
+}
+
+private data class PersistedChallengeEntry(
+    val id: String,
+    val unlocked: Boolean,
+    val completed: Boolean,
+    val claimed: Boolean,
+    val bestProgress: Int,
+    val statusNote: String,
+)
+
+private data class PersistedAppState(
+    val dayKey: Int,
+    val coinBalance: Int,
+    val bestScore: Int,
+    val homeDailyClaimed: Boolean,
+    val challenges: List<PersistedChallengeEntry>,
+)
+
+private class AppStateStorage(context: Context) {
+    private val prefs = context.getSharedPreferences("number_merge_2048_state", Context.MODE_PRIVATE)
+    private val key = "state_v2"
+
+    fun load(): PersistedAppState? {
+        val raw = prefs.getString(key, null) ?: return null
+        return runCatching {
+            val root = JSONObject(raw)
+            val challengeArray = root.optJSONArray("challenges") ?: JSONArray()
+            val challenges = mutableListOf<PersistedChallengeEntry>()
+            for (i in 0 until challengeArray.length()) {
+                val item = challengeArray.optJSONObject(i) ?: continue
+                challenges += PersistedChallengeEntry(
+                    id = item.optString("id"),
+                    unlocked = item.optBoolean("unlocked"),
+                    completed = item.optBoolean("completed"),
+                    claimed = item.optBoolean("claimed"),
+                    bestProgress = item.optInt("bestProgress"),
+                    statusNote = item.optString("statusNote"),
+                )
+            }
+
+            PersistedAppState(
+                dayKey = root.optInt("dayKey"),
+                coinBalance = root.optInt("coinBalance", 97),
+                bestScore = root.optInt("bestScore"),
+                homeDailyClaimed = root.optBoolean("homeDailyClaimed"),
+                challenges = challenges,
+            )
+        }.getOrNull()
+    }
+
+    fun save(
+        dayKey: Int,
+        coinBalance: Int,
+        bestScore: Int,
+        homeDailyClaimed: Boolean,
+        challenges: List<DailyChallengeState>,
+    ) {
+        val root = JSONObject()
+        root.put("dayKey", dayKey)
+        root.put("coinBalance", coinBalance)
+        root.put("bestScore", bestScore)
+        root.put("homeDailyClaimed", homeDailyClaimed)
+
+        val challengeArray = JSONArray()
+        challenges.forEach { challenge ->
+            challengeArray.put(
+                JSONObject().apply {
+                    put("id", challenge.definition.id)
+                    put("unlocked", challenge.unlocked)
+                    put("completed", challenge.completed)
+                    put("claimed", challenge.claimed)
+                    put("bestProgress", challenge.bestProgress)
+                    put("statusNote", challenge.statusNote)
+                }
+            )
+        }
+
+        root.put("challenges", challengeArray)
+        prefs.edit().putString(key, root.toString()).apply()
+    }
+}
+
+private fun currentDayKey(): Int {
+    val calendar = Calendar.getInstance()
+    val year = calendar.get(Calendar.YEAR)
+    val month = calendar.get(Calendar.MONTH) + 1
+    val day = calendar.get(Calendar.DAY_OF_MONTH)
+    return (year * 10_000) + (month * 100) + day
+}
+
+private fun buildDailyChallenges(): List<DailyChallengeDefinition> {
+    val seed = currentDayKey()
+    val random = Random(seed)
+
+    val beginnerPool = listOf(
+        challenge(
+            id = "beginner-128",
+            title = "Warm-up Chain",
+            description = "Three-step intro run with score + tile combo.",
+            tier = ChallengeTier.BEGINNER,
+            rewardCoins = 70,
+            boardSize = 4,
+            chainStages = listOf(
+                stage("b1-s1", "Ignition", "Reach score 600", score = 600),
+                stage("b1-s2", "First Merge", "Reach tile 128", tile = 128),
+                stage("b1-s3", "Stabilize", "Reach score 1500 and tile 256", score = 1500, tile = 256),
+            ),
+        ),
+        challenge(
+            id = "beginner-score",
+            title = "Chain Builder",
+            description = "Short chain with a clean finish.",
+            tier = ChallengeTier.BEGINNER,
+            rewardCoins = 75,
+            boardSize = 4,
+            chainStages = listOf(
+                stage("b2-s1", "Open Board", "Reach tile 64", tile = 64),
+                stage("b2-s2", "Midline", "Reach score 1200", score = 1200),
+                stage("b2-s3", "Pair Goal", "Reach score 1800 and tile 256", score = 1800, tile = 256),
+            ),
+        ),
+    )
+
+    val intermediatePool = listOf(
+        challenge(
+            id = "inter-512-bomb",
+            title = "Bomb Control Chain",
+            description = "Progressive chain with strict bomb discipline.",
+            tier = ChallengeTier.INTERMEDIATE,
+            rewardCoins = 130,
+            boardSize = 4,
+            chainStages = listOf(
+                stage("i1-s1", "Momentum", "Reach score 1800", score = 1800),
+                stage("i1-s2", "Pressure", "Reach tile 512", tile = 512),
+                stage("i1-s3", "Control", "Reach score 3600 and tile 512", score = 3600, tile = 512),
+            ),
+            maxBombUses = 1,
+            maxMoves = 95,
+        ),
+        challenge(
+            id = "inter-score-limit",
+            title = "Speed Ladder",
+            description = "Complete chain fast with limited power-up usage.",
+            tier = ChallengeTier.INTERMEDIATE,
+            rewardCoins = 140,
+            boardSize = 4,
+            chainStages = listOf(
+                stage("i2-s1", "Quick Start", "Reach score 1200", score = 1200),
+                stage("i2-s2", "Tile Push", "Reach tile 256", tile = 256),
+                stage("i2-s3", "Final Stretch", "Reach score 4200 and tile 512", score = 4200, tile = 512),
+            ),
+            maxMoves = 90,
+            maxPowerUpUses = 2,
+        ),
+    )
+
+    val advancedPool = listOf(
+        challenge(
+            id = "adv-1024-5x5",
+            title = "Midnight Chain",
+            description = "5x5 chain requiring score rhythm and tile scaling.",
+            tier = ChallengeTier.ADVANCED,
+            rewardCoins = 210,
+            boardSize = 5,
+            chainStages = listOf(
+                stage("a1-s1", "Prime", "Reach score 2400", score = 2400),
+                stage("a1-s2", "Widen", "Reach tile 512", tile = 512),
+                stage("a1-s3", "Dual Focus", "Reach score 6200 and tile 1024", score = 6200, tile = 1024),
+            ),
+            maxMoves = 140,
+        ),
+        challenge(
+            id = "adv-score-5x5",
+            title = "Precision Chain",
+            description = "Tight 5x5 chain with power-up cap.",
+            tier = ChallengeTier.ADVANCED,
+            rewardCoins = 225,
+            boardSize = 5,
+            chainStages = listOf(
+                stage("a2-s1", "Tempo", "Reach tile 256", tile = 256),
+                stage("a2-s2", "Balance", "Reach score 5000", score = 5000),
+                stage("a2-s3", "Precision", "Reach score 7600 and tile 1024", score = 7600, tile = 1024),
+            ),
+            maxMoves = 130,
+            maxPowerUpUses = 1,
+        ),
+    )
+
+    val expertPool = listOf(
+        challenge(
+            id = "expert-score-clean",
+            title = "No Power Zone Chain",
+            description = "Hard chain with zero power-up allowance.",
+            tier = ChallengeTier.EXPERT,
+            rewardCoins = 320,
+            boardSize = 6,
+            chainStages = listOf(
+                stage("e1-s1", "Pure Merge", "Reach score 3500", score = 3500),
+                stage("e1-s2", "Clean Growth", "Reach tile 1024", tile = 1024),
+                stage("e1-s3", "Mastery", "Reach score 10000 and tile 2048", score = 10000, tile = 2048),
+            ),
+            disallowPowerUps = true,
+            maxMoves = 220,
+        ),
+        challenge(
+            id = "expert-tile-2048",
+            title = "Apex Route",
+            description = "Expert chain with limited bombs and strict pace.",
+            tier = ChallengeTier.EXPERT,
+            rewardCoins = 340,
+            boardSize = 6,
+            chainStages = listOf(
+                stage("e2-s1", "Climb", "Reach tile 512", tile = 512),
+                stage("e2-s2", "Tension", "Reach score 7000", score = 7000),
+                stage("e2-s3", "Apex", "Reach score 12000 and tile 2048", score = 12000, tile = 2048),
+            ),
+            maxMoves = 200,
+            maxBombUses = 1,
+        ),
+    )
+
+    return listOf(
+        beginnerPool[random.nextInt(beginnerPool.size)],
+        intermediatePool[random.nextInt(intermediatePool.size)],
+        advancedPool[random.nextInt(advancedPool.size)],
+        expertPool[random.nextInt(expertPool.size)],
+    )
+}
+
 private class GameSession(
     val size: Int,
     initialBestScore: Int,
     startingCoins: Int,
+    private val challengeDefinition: DailyChallengeDefinition? = null,
 ) {
     var onCoinChange: ((Int) -> Unit)? = null
     var onBestScoreChange: ((Int) -> Unit)? = null
+    var onChallengeUpdate: ((ChallengeUiState) -> Unit)? = null
 
     private val random = Random(System.currentTimeMillis() xor size.toLong())
+    private val activeChallenge = challengeDefinition?.let { ActiveChallenge(it) }
 
     private var boardValues = IntArray(size * size)
     private var frozenTurns = IntArray(size * size)
@@ -216,12 +763,16 @@ private class GameSession(
         bombCount = 1
         freezeCount = 1
         powerMode = PowerMode.None
-        infoMessage = "Swipe to merge matching tiles."
+        infoMessage = challengeDefinition?.let {
+            "Challenge mode: ${it.title}"
+        } ?: "Swipe to merge matching tiles."
         undoStack.clear()
+        activeChallenge?.reset()
 
         spawnRandomTile(boardValues, frozenTurns)
         spawnRandomTile(boardValues, frozenTurns)
         updateFlags()
+        emitChallengeUpdate()
         boardVersion++
     }
 
@@ -243,6 +794,10 @@ private class GameSession(
                 )
             }
         }
+    }
+
+    fun challengeUiState(): ChallengeUiState? {
+        return activeChallenge?.toUiState(score, highestTile())
     }
 
     fun swipe(direction: Direction) {
@@ -278,11 +833,14 @@ private class GameSession(
 
         spawnRandomTile(boardValues, frozenTurns)
         updateFlags()
+        applyChallengeAfterMove()
 
-        infoMessage = if (result.pointsGained > 0) {
-            "+${result.pointsGained} score. Keep going!"
-        } else {
-            "Tile moved."
+        if (!isChallengeFinished()) {
+            infoMessage = if (result.pointsGained > 0) {
+                "+${result.pointsGained} score. Keep going!"
+            } else {
+                "Tile moved."
+            }
         }
 
         boardVersion++
@@ -332,7 +890,10 @@ private class GameSession(
         powerMode = PowerMode.None
 
         updateFlags()
-        infoMessage = "Undo complete."
+        registerPowerUpUse(isBomb = false)
+        if (!isChallengeFinished()) {
+            infoMessage = "Undo complete."
+        }
         boardVersion++
     }
 
@@ -403,7 +964,10 @@ private class GameSession(
                 powerMode = PowerMode.None
 
                 updateFlags()
-                infoMessage = "Swap applied."
+                registerPowerUpUse(isBomb = false)
+                if (!isChallengeFinished()) {
+                    infoMessage = "Swap applied."
+                }
                 boardVersion++
             }
 
@@ -428,7 +992,10 @@ private class GameSession(
                 powerMode = PowerMode.None
 
                 updateFlags()
-                infoMessage = "Tile removed with Bomb."
+                registerPowerUpUse(isBomb = true)
+                if (!isChallengeFinished()) {
+                    infoMessage = "Tile removed with Bomb."
+                }
                 boardVersion++
             }
 
@@ -452,7 +1019,10 @@ private class GameSession(
                 powerMode = PowerMode.None
 
                 updateFlags()
-                infoMessage = "Tile frozen for 3 moves."
+                registerPowerUpUse(isBomb = false)
+                if (!isChallengeFinished()) {
+                    infoMessage = "Tile frozen for 3 moves."
+                }
                 boardVersion++
             }
         }
@@ -470,6 +1040,46 @@ private class GameSession(
     fun onShareTapped() {
         infoMessage = "Share will be enabled in the next update."
         boardVersion++
+    }
+
+    private fun highestTile(): Int = boardValues.maxOrNull() ?: 0
+
+    private fun isChallengeFinished(): Boolean {
+        val challenge = activeChallenge ?: return false
+        return challenge.completed || challenge.failed
+    }
+
+    private fun applyChallengeAfterMove() {
+        val challenge = activeChallenge ?: return
+
+        challenge.onMove(score = score, highestTile = highestTile())
+        if (isGameOver && !challenge.completed && !challenge.failed) {
+            challenge.fail("Board locked before goal reached")
+        }
+
+        if (challenge.completed) {
+            infoMessage = "Challenge completed! Claim reward in Daily Challenges."
+        } else if (challenge.failed) {
+            infoMessage = challenge.failureReason ?: "Challenge failed."
+        }
+
+        emitChallengeUpdate()
+    }
+
+    private fun registerPowerUpUse(isBomb: Boolean) {
+        val challenge = activeChallenge ?: return
+        challenge.onPowerUpUsed(isBomb)
+
+        if (challenge.failed) {
+            infoMessage = challenge.failureReason ?: "Challenge failed."
+        }
+
+        emitChallengeUpdate()
+    }
+
+    private fun emitChallengeUpdate() {
+        val uiState = challengeUiState() ?: return
+        onChallengeUpdate?.invoke(uiState)
     }
 
     private fun pushUndoSnapshot() {
@@ -714,7 +1324,9 @@ private class GameSession(
     }
 }
 
-private class AppCoordinator {
+private class AppCoordinator(private val context: Context) {
+    private val storage = AppStateStorage(context)
+
     var screen by mutableStateOf(AppScreen.HOME)
         private set
 
@@ -731,9 +1343,71 @@ private class AppCoordinator {
         private set
 
     private val sessions = mutableMapOf<Int, GameSession>()
+    private val dayKey = currentDayKey()
+    private var homeDailyClaimed by mutableStateOf(false)
+
+    val dailyChallenges = mutableStateListOf<DailyChallengeState>()
 
     var activeSession by mutableStateOf<GameSession?>(null)
         private set
+
+    val dailyChallengeHeader: String
+        get() = "Daily Challenges • $dayKey"
+
+    init {
+        refreshDailyChallenges()
+        loadPersistedState()
+    }
+
+    private fun refreshDailyChallenges() {
+        dailyChallenges.clear()
+        buildDailyChallenges().forEachIndexed { index, definition ->
+            val challenge = DailyChallengeState(
+                definition = definition,
+                initiallyUnlocked = index == 0,
+            )
+            challenge.statusNote = if (index == 0) "Available" else "Locked"
+            dailyChallenges += challenge
+        }
+    }
+
+    private fun loadPersistedState() {
+        val persisted = storage.load() ?: run {
+            persistState()
+            return
+        }
+
+        coinBalance = persisted.coinBalance
+        bestScore = persisted.bestScore
+
+        if (persisted.dayKey != dayKey) {
+            homeDailyClaimed = false
+            persistState()
+            return
+        }
+
+        homeDailyClaimed = persisted.homeDailyClaimed
+        val persistedMap = persisted.challenges.associateBy { it.id }
+        dailyChallenges.forEach { challenge ->
+            val entry = persistedMap[challenge.definition.id] ?: return@forEach
+            challenge.unlocked = entry.unlocked
+            challenge.completed = entry.completed
+            challenge.claimed = entry.claimed
+            challenge.bestProgress = entry.bestProgress
+            challenge.statusNote = entry.statusNote
+        }
+    }
+
+    private fun persistState() {
+        storage.save(
+            dayKey = dayKey,
+            coinBalance = coinBalance,
+            bestScore = bestScore,
+            homeDailyClaimed = homeDailyClaimed,
+            challenges = dailyChallenges,
+        )
+    }
+
     fun openHome() {
         screen = AppScreen.HOME
     }
@@ -795,10 +1469,83 @@ private class AppCoordinator {
     }
 
     fun collectDailyReward() {
+        if (homeDailyClaimed) {
+            homeMessage = "Daily home reward already claimed today."
+            return
+        }
         val reward = 40
+        homeDailyClaimed = true
         coinBalance += reward
         activeSession?.syncCoins(coinBalance)
         homeMessage = "Daily reward claimed: +$reward coins."
+        persistState()
+    }
+
+    fun startChallenge(challengeId: String) {
+        val challengeState = dailyChallenges.firstOrNull { it.definition.id == challengeId } ?: return
+        if (!challengeState.unlocked) {
+            homeMessage = "This challenge is locked."
+            return
+        }
+
+        val size = challengeState.definition.boardSize
+        val sizeBest = sessions[size]?.bestScore ?: 0
+        val session = GameSession(
+            size = size,
+            initialBestScore = max(bestScore, sizeBest),
+            startingCoins = coinBalance,
+            challengeDefinition = challengeState.definition,
+        )
+
+        challengeState.statusNote = "In progress"
+        attachSession(session)
+        screen = AppScreen.GAME
+        homeMessage = "Challenge started: ${challengeState.definition.title}"
+        persistState()
+    }
+
+    fun claimChallengeReward(challengeId: String) {
+        val challengeState = dailyChallenges.firstOrNull { it.definition.id == challengeId } ?: return
+        if (!challengeState.completed || challengeState.claimed) {
+            return
+        }
+
+        challengeState.claimed = true
+        val reward = challengeState.definition.rewardCoins
+        coinBalance += reward
+        activeSession?.syncCoins(coinBalance)
+        challengeState.statusNote = "Reward claimed (+$reward)"
+        homeMessage = "Challenge reward received: +$reward coins."
+        persistState()
+    }
+
+    private fun onChallengeUpdate(update: ChallengeUiState) {
+        val challengeState = dailyChallenges.firstOrNull { it.definition.id == update.id } ?: return
+
+        challengeState.bestProgress = max(challengeState.bestProgress, update.progressCurrent)
+        challengeState.statusNote = update.statusText
+
+        if (update.isCompleted && !challengeState.completed) {
+            challengeState.completed = true
+            challengeState.statusNote = "Completed. Reward ready."
+            unlockNextChallenge(update.id)
+            homeMessage = "Challenge completed: ${update.title}"
+        }
+        persistState()
+    }
+
+    private fun unlockNextChallenge(completedChallengeId: String) {
+        val index = dailyChallenges.indexOfFirst { it.definition.id == completedChallengeId }
+        if (index < 0) {
+            return
+        }
+
+        val next = dailyChallenges.getOrNull(index + 1) ?: return
+        if (!next.unlocked) {
+            next.unlocked = true
+            next.statusNote = "Unlocked"
+            persistState()
+        }
     }
 
     fun addFreeCoins() {
@@ -806,6 +1553,7 @@ private class AppCoordinator {
         coinBalance += amount
         activeSession?.syncCoins(coinBalance)
         homeMessage = "+$amount coins added from store."
+        persistState()
     }
 
     fun addPowerPack() {
@@ -817,6 +1565,7 @@ private class AppCoordinator {
 
         session.grantPowerUps(swap = 2, undo = 2, bomb = 1, freeze = 1)
         homeMessage = "Power pack delivered to active game."
+        persistState()
     }
 
     private fun attachSession(session: GameSession) {
@@ -825,23 +1574,31 @@ private class AppCoordinator {
 
         session.onCoinChange = { updatedCoins ->
             coinBalance = updatedCoins
+            persistState()
         }
 
         session.onBestScoreChange = { updatedBest ->
             if (updatedBest > bestScore) {
                 bestScore = updatedBest
+                persistState()
             }
+        }
+
+        session.onChallengeUpdate = { update ->
+            onChallengeUpdate(update)
         }
 
         if (session.bestScore > bestScore) {
             bestScore = session.bestScore
+            persistState()
         }
     }
 }
 
 @Composable
 private fun NumberMergeApp() {
-    val coordinator = remember { AppCoordinator() }
+    val appContext = LocalContext.current.applicationContext
+    val coordinator = remember(appContext) { AppCoordinator(appContext) }
 
     when (coordinator.screen) {
         AppScreen.HOME -> {
@@ -891,8 +1648,11 @@ private fun NumberMergeApp() {
 
         AppScreen.DAILY_CHALLENGES -> {
             DailyChallengesScreen(
+                header = coordinator.dailyChallengeHeader,
+                challenges = coordinator.dailyChallenges,
                 onBack = coordinator::openHome,
-                onClaimReward = coordinator::collectDailyReward,
+                onStartChallenge = coordinator::startChallenge,
+                onClaimReward = coordinator::claimChallengeReward,
             )
         }
 
@@ -1175,8 +1935,11 @@ private fun boardDescription(size: Int): String {
 }
 @Composable
 private fun DailyChallengesScreen(
+    header: String,
+    challenges: List<DailyChallengeState>,
     onBack: () -> Unit,
-    onClaimReward: () -> Unit,
+    onStartChallenge: (String) -> Unit,
+    onClaimReward: (String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -1189,43 +1952,89 @@ private fun DailyChallengesScreen(
             IconButton(onClick = onBack) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back")
             }
-            Text("Daily Challenges", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        }
-
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFD686)),
-            shape = RoundedCornerShape(14.dp),
-        ) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Today's Challenge", fontWeight = FontWeight.Bold)
-                Text("Bomb Challenge")
-                Text("Reach 1024 with only 1 bomb power-up", color = TextSecondary)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Reward: 100", fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.weight(1f))
-                    Button(onClick = onClaimReward) {
-                        Text("Claim")
-                    }
-                }
-            }
+            Text(header, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DifficultyPill("Beginner", "0/5")
-            DifficultyPill("Inter.", "0/5")
-            DifficultyPill("Advanced", "0/5")
-            DifficultyPill("Expert", "0/5")
+            ChallengeTier.values().forEach { tier ->
+                val total = challenges.count { it.definition.tier == tier }
+                val done = challenges.count { it.definition.tier == tier && it.completed }
+                DifficultyPill(tier.label, "$done/$total")
+            }
         }
 
-        repeat(5) { idx ->
-            Card(colors = CardDefaults.cardColors(containerColor = PanelBackground)) {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (idx == 0) {
-                        Text("Warm-up Score", fontWeight = FontWeight.Bold)
-                        Text("Score at least 2000 points in 2 runs", color = TextSecondary)
-                    } else {
-                        Text("Locked Challenge", fontWeight = FontWeight.Bold)
-                        Text("Complete previous challenges to unlock", color = TextSecondary)
+        challenges.forEach { challenge ->
+            DailyChallengeCard(
+                challenge = challenge,
+                onStartChallenge = onStartChallenge,
+                onClaimReward = onClaimReward,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DailyChallengeCard(
+    challenge: DailyChallengeState,
+    onStartChallenge: (String) -> Unit,
+    onClaimReward: (String) -> Unit,
+) {
+    val definition = challenge.definition
+    val progressText = bestProgressLabel(challenge)
+
+    val cardColor = when {
+        challenge.completed && challenge.claimed -> Color(0xFFE5F6E9)
+        challenge.completed -> Color(0xFFFFF2C5)
+        challenge.unlocked -> PanelBackground
+        else -> Color(0xFFEDE7DD)
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(definition.title, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Spacer(modifier = Modifier.weight(1f))
+                Text(definition.tier.label, color = TextSecondary)
+            }
+
+            Text(definition.description, color = TextSecondary)
+            Text("Board ${definition.boardSize}x${definition.boardSize} • Reward ${definition.rewardCoins} coins", color = TextSecondary)
+            Text(chainSummary(definition.chainStages), color = TextSecondary)
+            Text(progressText, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+            Text(challenge.statusNote, color = TextSecondary)
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                when {
+                    !challenge.unlocked -> {
+                        OutlinedButton(onClick = {}, enabled = false) {
+                            Text("Locked")
+                        }
+                    }
+
+                    challenge.completed && !challenge.claimed -> {
+                        Button(onClick = { onClaimReward(definition.id) }) {
+                            Text("Claim Reward")
+                        }
+                    }
+
+                    challenge.completed && challenge.claimed -> {
+                        OutlinedButton(onClick = {}, enabled = false) {
+                            Text("Claimed")
+                        }
+                    }
+
+                    else -> {
+                        Button(onClick = { onStartChallenge(definition.id) }) {
+                            Text("Start Challenge")
+                        }
                     }
                 }
             }
@@ -1354,6 +2163,9 @@ private fun GameScreen(
     val boardRows = remember(session.boardVersion, session.powerMode) {
         session.boardRows()
     }
+    val challengeState = remember(session.boardVersion) {
+        session.challengeUiState()
+    }
 
     Column(
         modifier = Modifier
@@ -1401,6 +2213,26 @@ private fun GameScreen(
                     .padding(10.dp),
                 color = TextPrimary,
             )
+        }
+
+        if (challengeState != null) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE5B4)),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text("Challenge: ${challengeState.title}", fontWeight = FontWeight.Bold)
+                    Text(challengeState.description, color = TextSecondary)
+                    Text(challengeState.stageText, color = TextSecondary)
+                    Text(challengeState.progressText, fontWeight = FontWeight.SemiBold)
+                    Text(challengeState.statusText, color = TextSecondary)
+                }
+            }
         }
 
         GameBoard(
@@ -1662,3 +2494,5 @@ private fun tileColors(value: Int): Pair<Color, Color> {
         else -> Color(0xFF3C3A32) to Color.White
     }
 }
+
+
