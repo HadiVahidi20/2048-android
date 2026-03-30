@@ -1,0 +1,16 @@
+﻿.gradle/
+.idea/
+local.properties
+/build/
+/app/build/
+*.iml
+
+# Signing artifacts
+keystore.properties
+keystore/*.jks
+keystore/*.keystore
+keystore/*.p12
+keystore/*.pem
+
+# Temporary files
+*.log
