@@ -12,7 +12,7 @@ android {
     defaultConfig {
         applicationId = "com.hadify.NumberMerge2048"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1000
         versionName = "1.0.0-rebuild"
 

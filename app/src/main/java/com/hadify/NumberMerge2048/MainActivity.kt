@@ -1,9 +1,15 @@
 ﻿package com.hadify.NumberMerge2048
 
 import android.content.Context
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,9 +24,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -35,13 +43,14 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Typography
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -51,11 +60,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -71,8 +88,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             NumberMergeTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = AppBackground) {
-                    NumberMergeApp()
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color.Transparent,
+                    contentColor = TextPrimary,
+                ) {
+                    AppBackgroundLayer {
+                        NumberMergeApp()
+                    }
                 }
             }
         }
@@ -81,33 +104,240 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun NumberMergeTheme(content: @Composable () -> Unit) {
-    val colors = lightColorScheme(
+    val colors = darkColorScheme(
         primary = OrangePrimary,
-        onPrimary = Color.White,
+        onPrimary = Color(0xFF1A1208),
+        primaryContainer = Color(0xFF4A3521),
+        onPrimaryContainer = Color(0xFFFEE9D5),
         secondary = GreenPrimary,
+        onSecondary = Color(0xFF0F1E15),
+        secondaryContainer = Color(0xFF22382C),
+        onSecondaryContainer = Color(0xFFDDF8E5),
         background = AppBackground,
-        surface = Color(0xFFFFFBF2),
+        onBackground = TextPrimary,
+        surface = PanelBackground,
         onSurface = TextPrimary,
+        tertiary = BlueAccent,
+        onTertiary = Color(0xFF111D2D),
+        error = Color(0xFFD65E5E),
+        onError = Color.White,
     )
 
+    val base = Typography()
     MaterialTheme(
         colorScheme = colors,
-        typography = Typography(),
+        typography = Typography(
+            displaySmall = base.displaySmall.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black),
+            headlineMedium = base.headlineMedium.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold),
+            titleLarge = base.titleLarge.copy(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold),
+            titleMedium = base.titleMedium.copy(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold),
+            bodyLarge = base.bodyLarge.copy(fontFamily = FontFamily.SansSerif),
+            bodyMedium = base.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
+            labelLarge = base.labelLarge.copy(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold),
+        ),
         content = content,
     )
 }
 
-private val AppBackground = Color(0xFFF5EECF)
-private val OrangePrimary = Color(0xFFF5A100)
-private val GreenPrimary = Color(0xFF35B558)
-private val BlueAccent = Color(0xFFD9ECFF)
-private val PanelBackground = Color(0xFFFDF8EC)
-private val TextPrimary = Color(0xFF3A2F25)
-private val TextSecondary = Color(0xFF786B5D)
-private val BoardBackground = Color(0xFFD0C3B7)
-private val EmptyTileColor = Color(0xFFCFC4B9)
-private val SelectionColor = Color(0xFF5A4BF0)
-private val FrozenColor = Color(0xFF39B7F0)
+@Composable
+private fun AppBackgroundLayer(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF16141F),
+                        Color(0xFF121721),
+                        Color(0xFF17131C),
+                    )
+                )
+            ),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0x33FFB347),
+                            Color.Transparent,
+                        ),
+                        radius = 900f,
+                    )
+                )
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0x223A8DFF),
+                            Color.Transparent,
+                        ),
+                        radius = 800f,
+                    )
+                )
+        )
+        content()
+    }
+}
+
+private val AppBackground = Color(0xFF14131B)
+private val OrangePrimary = Color(0xFFFFA938)
+private val GreenPrimary = Color(0xFF63D883)
+private val BlueAccent = Color(0xFF69B3FF)
+private val PanelBackground = Color(0xFF23202C)
+private val PanelBackgroundSoft = Color(0xFF2A2633)
+private val PanelBorder = Color(0x40FFFFFF)
+private val TextPrimary = Color(0xFFF6F2E9)
+private val TextSecondary = Color(0xFFC0B7AA)
+private val BoardBackground = Color(0xFF2E2A38)
+private val EmptyTileColor = Color(0xFF3A3644)
+private val SelectionColor = Color(0xFFFFC65B)
+private val FrozenColor = Color(0xFF78D6FF)
+
+private enum class StoreCategory {
+    UTILITY,
+    SINGLE_CHARGE,
+    PACK,
+}
+
+private data class StoreOffer(
+    val id: String,
+    val category: StoreCategory,
+    val title: String,
+    val description: String,
+    val accent: Color,
+    val priceCoins: Int,
+    val ctaLabel: String,
+    val iconRes: Int? = null,
+    val iconVector: ImageVector? = null,
+    val rewardCoins: Int = 0,
+    val rewardSwap: Int = 0,
+    val rewardUndo: Int = 0,
+    val rewardBomb: Int = 0,
+    val rewardFreeze: Int = 0,
+)
+
+private val powerupStoreOffers = listOf(
+    StoreOffer(
+        id = "coins_booster",
+        category = StoreCategory.UTILITY,
+        title = "Coin Booster",
+        description = "Instantly adds coins for testing and faster progression.",
+        accent = BlueAccent,
+        priceCoins = 0,
+        ctaLabel = "Claim",
+        iconVector = Icons.Default.ShoppingCart,
+        rewardCoins = 120,
+    ),
+    StoreOffer(
+        id = "swap_charge",
+        category = StoreCategory.SINGLE_CHARGE,
+        title = "Swap Charge",
+        description = "Adds one extra Swap use to your active run.",
+        accent = Color(0xFF4E76FF),
+        priceCoins = 18,
+        ctaLabel = "Buy",
+        iconRes = R.drawable.ic_power_swap,
+        rewardSwap = 1,
+    ),
+    StoreOffer(
+        id = "undo_charge",
+        category = StoreCategory.SINGLE_CHARGE,
+        title = "Undo Charge",
+        description = "Adds one extra Undo use to your active run.",
+        accent = Color(0xFF7BC1FF),
+        priceCoins = 15,
+        ctaLabel = "Buy",
+        iconRes = R.drawable.ic_power_undo,
+        rewardUndo = 1,
+    ),
+    StoreOffer(
+        id = "bomb_charge",
+        category = StoreCategory.SINGLE_CHARGE,
+        title = "Bomb Charge",
+        description = "Adds one Bomb use to clear a tile.",
+        accent = Color(0xFFFF6D57),
+        priceCoins = 24,
+        ctaLabel = "Buy",
+        iconRes = R.drawable.ic_power_bomb,
+        rewardBomb = 1,
+    ),
+    StoreOffer(
+        id = "freeze_charge",
+        category = StoreCategory.SINGLE_CHARGE,
+        title = "Freeze Charge",
+        description = "Adds one Freeze use to lock a tile.",
+        accent = Color(0xFF73D7FF),
+        priceCoins = 20,
+        ctaLabel = "Buy",
+        iconRes = R.drawable.ic_power_freeze,
+        rewardFreeze = 1,
+    ),
+    StoreOffer(
+        id = "starter_pack",
+        category = StoreCategory.PACK,
+        title = "Starter Pack",
+        description = "Balanced refill for all core powers.",
+        accent = OrangePrimary,
+        priceCoins = 42,
+        ctaLabel = "Buy Pack",
+        iconVector = Icons.Default.Menu,
+        rewardSwap = 2,
+        rewardUndo = 2,
+        rewardBomb = 1,
+        rewardFreeze = 1,
+    ),
+    StoreOffer(
+        id = "tactical_pack",
+        category = StoreCategory.PACK,
+        title = "Tactical Pack",
+        description = "For challenge pushes and recovery turns.",
+        accent = Color(0xFF9B8BFF),
+        priceCoins = 68,
+        ctaLabel = "Buy Pack",
+        iconVector = Icons.Default.Menu,
+        rewardSwap = 3,
+        rewardUndo = 3,
+        rewardBomb = 2,
+        rewardFreeze = 2,
+    ),
+    StoreOffer(
+        id = "explosive_pack",
+        category = StoreCategory.PACK,
+        title = "Explosive Pack",
+        description = "Extra bombs and freezes for difficult boards.",
+        accent = Color(0xFFFF8A50),
+        priceCoins = 74,
+        ctaLabel = "Buy Pack",
+        iconVector = Icons.Default.Menu,
+        rewardSwap = 1,
+        rewardUndo = 2,
+        rewardBomb = 3,
+        rewardFreeze = 2,
+    ),
+)
+
+private fun StoreOffer.requiresActiveSession(): Boolean {
+    return rewardSwap > 0 || rewardUndo > 0 || rewardBomb > 0 || rewardFreeze > 0
+}
+
+private fun StoreOffer.rewardSummary(): String {
+    val lines = mutableListOf<String>()
+    if (rewardCoins > 0) lines += "+$rewardCoins coins"
+    if (rewardSwap > 0) lines += "Swap +$rewardSwap"
+    if (rewardUndo > 0) lines += "Undo +$rewardUndo"
+    if (rewardBomb > 0) lines += "Bomb +$rewardBomb"
+    if (rewardFreeze > 0) lines += "Freeze +$rewardFreeze"
+    return lines.joinToString("  •  ")
+}
+
+private fun readableTextOn(background: Color): Color {
+    return if (background.luminance() >= 0.42f) Color(0xFF18110B) else Color.White
+}
 
 private enum class AppScreen {
     HOME,
@@ -123,6 +353,37 @@ private enum class Direction {
     RIGHT,
     UP,
     DOWN,
+}
+
+private enum class GameSoundEvent {
+    MOVE,
+    MERGE,
+    ERROR,
+    POWER_UP,
+    WIN,
+    GAME_OVER,
+    RESET,
+}
+
+private class GameAudioEngine {
+    private val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 85)
+    var enabled: Boolean = true
+
+    fun play(event: GameSoundEvent) {
+        if (!enabled) return
+
+        val (tone, duration) = when (event) {
+            GameSoundEvent.MOVE -> ToneGenerator.TONE_PROP_BEEP to 45
+            GameSoundEvent.MERGE -> ToneGenerator.TONE_PROP_ACK to 70
+            GameSoundEvent.ERROR -> ToneGenerator.TONE_PROP_NACK to 90
+            GameSoundEvent.POWER_UP -> ToneGenerator.TONE_DTMF_8 to 80
+            GameSoundEvent.WIN -> ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD to 130
+            GameSoundEvent.GAME_OVER -> ToneGenerator.TONE_SUP_ERROR to 140
+            GameSoundEvent.RESET -> ToneGenerator.TONE_DTMF_2 to 70
+        }
+
+        toneGenerator.startTone(tone, duration)
+    }
 }
 
 private sealed interface PowerMode {
@@ -705,6 +966,7 @@ private class GameSession(
     var onCoinChange: ((Int) -> Unit)? = null
     var onBestScoreChange: ((Int) -> Unit)? = null
     var onChallengeUpdate: ((ChallengeUiState) -> Unit)? = null
+    var onSoundEvent: ((GameSoundEvent) -> Unit)? = null
 
     private val random = Random(System.currentTimeMillis() xor size.toLong())
     private val activeChallenge = challengeDefinition?.let { ActiveChallenge(it) }
@@ -773,6 +1035,7 @@ private class GameSession(
         spawnRandomTile(boardValues, frozenTurns)
         updateFlags()
         emitChallengeUpdate()
+        emitSound(GameSoundEvent.RESET)
         boardVersion++
     }
 
@@ -803,6 +1066,7 @@ private class GameSession(
     fun swipe(direction: Direction) {
         if (powerMode != PowerMode.None) {
             infoMessage = "Finish power-up selection first."
+            emitSound(GameSoundEvent.ERROR)
             boardVersion++
             return
         }
@@ -810,6 +1074,7 @@ private class GameSession(
         val result = simulateMove(boardValues, frozenTurns, direction)
         if (!result.hasChanged) {
             infoMessage = "No move in that direction."
+            emitSound(GameSoundEvent.ERROR)
             boardVersion++
             return
         }
@@ -843,6 +1108,8 @@ private class GameSession(
             }
         }
 
+        emitSound(if (result.pointsGained > 0) GameSoundEvent.MERGE else GameSoundEvent.MOVE)
+
         boardVersion++
     }
 
@@ -850,6 +1117,7 @@ private class GameSession(
         if (powerMode is PowerMode.SwapFirst || powerMode is PowerMode.SwapSecond) {
             powerMode = PowerMode.None
             infoMessage = "Swap canceled."
+            emitSound(GameSoundEvent.MOVE)
             boardVersion++
             return
         }
@@ -860,24 +1128,28 @@ private class GameSession(
 
         powerMode = PowerMode.SwapFirst
         infoMessage = "Select the first tile to swap."
+        emitSound(GameSoundEvent.MOVE)
         boardVersion++
     }
 
     fun activateUndo() {
         if (undoCount <= 0) {
             infoMessage = "No Undo charges left."
+            emitSound(GameSoundEvent.ERROR)
             boardVersion++
             return
         }
 
         if (undoStack.isEmpty()) {
             infoMessage = "Nothing to undo yet."
+            emitSound(GameSoundEvent.ERROR)
             boardVersion++
             return
         }
 
         if (!spendCoins(UNDO_COST)) {
             infoMessage = "Need $UNDO_COST coins for Undo."
+            emitSound(GameSoundEvent.ERROR)
             boardVersion++
             return
         }
@@ -894,6 +1166,7 @@ private class GameSession(
         if (!isChallengeFinished()) {
             infoMessage = "Undo complete."
         }
+        emitSound(GameSoundEvent.POWER_UP)
         boardVersion++
     }
 
@@ -901,6 +1174,7 @@ private class GameSession(
         if (powerMode is PowerMode.Bomb) {
             powerMode = PowerMode.None
             infoMessage = "Bomb canceled."
+            emitSound(GameSoundEvent.MOVE)
             boardVersion++
             return
         }
@@ -911,6 +1185,7 @@ private class GameSession(
 
         powerMode = PowerMode.Bomb
         infoMessage = "Select a tile to remove it."
+        emitSound(GameSoundEvent.MOVE)
         boardVersion++
     }
 
@@ -918,6 +1193,7 @@ private class GameSession(
         if (powerMode is PowerMode.Freeze) {
             powerMode = PowerMode.None
             infoMessage = "Freeze canceled."
+            emitSound(GameSoundEvent.MOVE)
             boardVersion++
             return
         }
@@ -928,6 +1204,7 @@ private class GameSession(
 
         powerMode = PowerMode.Freeze
         infoMessage = "Select a tile to freeze for 3 moves."
+        emitSound(GameSoundEvent.MOVE)
         boardVersion++
     }
 
@@ -938,9 +1215,11 @@ private class GameSession(
             PowerMode.SwapFirst -> {
                 if (boardValues[index] == 0) {
                     infoMessage = "Pick a numbered tile first."
+                    emitSound(GameSoundEvent.ERROR)
                 } else {
                     powerMode = PowerMode.SwapSecond(index)
                     infoMessage = "Now select the second tile."
+                    emitSound(GameSoundEvent.MOVE)
                 }
                 boardVersion++
             }
@@ -948,12 +1227,14 @@ private class GameSession(
             is PowerMode.SwapSecond -> {
                 if (index == mode.firstIndex) {
                     infoMessage = "Select a different tile."
+                    emitSound(GameSoundEvent.ERROR)
                     boardVersion++
                     return
                 }
                 if (!spendCoins(SWAP_COST)) {
                     powerMode = PowerMode.None
                     infoMessage = "Need $SWAP_COST coins for Swap."
+                    emitSound(GameSoundEvent.ERROR)
                     boardVersion++
                     return
                 }
@@ -968,12 +1249,14 @@ private class GameSession(
                 if (!isChallengeFinished()) {
                     infoMessage = "Swap applied."
                 }
+                emitSound(GameSoundEvent.POWER_UP)
                 boardVersion++
             }
 
             PowerMode.Bomb -> {
                 if (boardValues[index] == 0) {
                     infoMessage = "Pick a numbered tile to remove."
+                    emitSound(GameSoundEvent.ERROR)
                     boardVersion++
                     return
                 }
@@ -981,6 +1264,7 @@ private class GameSession(
                 if (!spendCoins(BOMB_COST)) {
                     powerMode = PowerMode.None
                     infoMessage = "Need $BOMB_COST coins for Bomb."
+                    emitSound(GameSoundEvent.ERROR)
                     boardVersion++
                     return
                 }
@@ -996,12 +1280,14 @@ private class GameSession(
                 if (!isChallengeFinished()) {
                     infoMessage = "Tile removed with Bomb."
                 }
+                emitSound(GameSoundEvent.POWER_UP)
                 boardVersion++
             }
 
             PowerMode.Freeze -> {
                 if (boardValues[index] == 0) {
                     infoMessage = "Pick a numbered tile to freeze."
+                    emitSound(GameSoundEvent.ERROR)
                     boardVersion++
                     return
                 }
@@ -1009,6 +1295,7 @@ private class GameSession(
                 if (!spendCoins(FREEZE_COST)) {
                     powerMode = PowerMode.None
                     infoMessage = "Need $FREEZE_COST coins for Freeze."
+                    emitSound(GameSoundEvent.ERROR)
                     boardVersion++
                     return
                 }
@@ -1023,6 +1310,7 @@ private class GameSession(
                 if (!isChallengeFinished()) {
                     infoMessage = "Tile frozen for 3 moves."
                 }
+                emitSound(GameSoundEvent.POWER_UP)
                 boardVersion++
             }
         }
@@ -1034,6 +1322,7 @@ private class GameSession(
         bombCount += max(0, bomb)
         freezeCount += max(0, freeze)
         infoMessage = "Power-ups restocked."
+        emitSound(GameSoundEvent.POWER_UP)
         boardVersion++
     }
 
@@ -1250,8 +1539,16 @@ private class GameSession(
     }
 
     private fun updateFlags() {
+        val oldWon = hasWon
+        val oldGameOver = isGameOver
         hasWon = boardValues.any { it >= 2048 }
         isGameOver = !canAnyMove()
+        if (!oldWon && hasWon) {
+            emitSound(GameSoundEvent.WIN)
+        }
+        if (!oldGameOver && isGameOver) {
+            emitSound(GameSoundEvent.GAME_OVER)
+        }
     }
 
     private fun canAnyMove(): Boolean {
@@ -1272,12 +1569,14 @@ private class GameSession(
     private fun checkPowerReady(name: String, count: Int, cost: Int): Boolean {
         if (count <= 0) {
             infoMessage = "$name unavailable."
+            emitSound(GameSoundEvent.ERROR)
             boardVersion++
             return false
         }
 
         if (coins < cost) {
             infoMessage = "Need $cost coins for $name."
+            emitSound(GameSoundEvent.ERROR)
             boardVersion++
             return false
         }
@@ -1304,6 +1603,10 @@ private class GameSession(
         onCoinChange?.invoke(coins)
     }
 
+    private fun emitSound(event: GameSoundEvent) {
+        onSoundEvent?.invoke(event)
+    }
+
     private fun isTileSelected(index: Int): Boolean {
         return when (val mode = powerMode) {
             PowerMode.None,
@@ -1326,6 +1629,7 @@ private class GameSession(
 
 private class AppCoordinator(private val context: Context) {
     private val storage = AppStateStorage(context)
+    private val audioEngine = GameAudioEngine()
 
     var screen by mutableStateOf(AppScreen.HOME)
         private set
@@ -1342,6 +1646,9 @@ private class AppCoordinator(private val context: Context) {
     var homeMessage by mutableStateOf<String?>(null)
         private set
 
+    var soundEnabled by mutableStateOf(true)
+        private set
+
     private val sessions = mutableMapOf<Int, GameSession>()
     private val dayKey = currentDayKey()
     private var homeDailyClaimed by mutableStateOf(false)
@@ -1353,6 +1660,9 @@ private class AppCoordinator(private val context: Context) {
 
     val dailyChallengeHeader: String
         get() = "Daily Challenges • $dayKey"
+
+    val storeOffers: List<StoreOffer>
+        get() = powerupStoreOffers
 
     init {
         refreshDailyChallenges()
@@ -1427,6 +1737,12 @@ private class AppCoordinator(private val context: Context) {
 
     fun openPowerupStore() {
         screen = AppScreen.POWERUP_STORE
+    }
+
+    fun toggleSound() {
+        soundEnabled = !soundEnabled
+        audioEngine.enabled = soundEnabled
+        homeMessage = if (soundEnabled) "Sound enabled" else "Sound muted"
     }
 
     fun selectBoardSize(size: Int) {
@@ -1548,29 +1864,50 @@ private class AppCoordinator(private val context: Context) {
         }
     }
 
-    fun addFreeCoins() {
-        val amount = 120
-        coinBalance += amount
-        activeSession?.syncCoins(coinBalance)
-        homeMessage = "+$amount coins added from store."
-        persistState()
-    }
-
-    fun addPowerPack() {
+    fun purchaseStoreOffer(offerId: String) {
+        val offer = storeOffers.firstOrNull { it.id == offerId } ?: return
         val session = activeSession
-        if (session == null) {
-            homeMessage = "Open a game first, then apply power packs."
+
+        if (offer.requiresActiveSession() && session == null) {
+            homeMessage = "Open a game first to receive power-up charges."
             return
         }
 
-        session.grantPowerUps(swap = 2, undo = 2, bomb = 1, freeze = 1)
-        homeMessage = "Power pack delivered to active game."
+        if (coinBalance < offer.priceCoins) {
+            homeMessage = "Need ${offer.priceCoins} coins for ${offer.title}."
+            return
+        }
+
+        if (offer.priceCoins > 0) {
+            coinBalance -= offer.priceCoins
+        }
+        if (offer.rewardCoins > 0) {
+            coinBalance += offer.rewardCoins
+        }
+
+        session?.syncCoins(coinBalance)
+        if (session != null && offer.requiresActiveSession()) {
+            session.grantPowerUps(
+                swap = offer.rewardSwap,
+                undo = offer.rewardUndo,
+                bomb = offer.rewardBomb,
+                freeze = offer.rewardFreeze,
+            )
+        }
+
+        val rewards = offer.rewardSummary()
+        homeMessage = if (offer.priceCoins > 0) {
+            "${offer.title} purchased • $rewards"
+        } else {
+            "${offer.title} claimed • $rewards"
+        }
         persistState()
     }
 
     private fun attachSession(session: GameSession) {
         activeSession = session
         coinBalance = session.coins
+        audioEngine.enabled = soundEnabled
 
         session.onCoinChange = { updatedCoins ->
             coinBalance = updatedCoins
@@ -1586,6 +1923,10 @@ private class AppCoordinator(private val context: Context) {
 
         session.onChallengeUpdate = { update ->
             onChallengeUpdate(update)
+        }
+
+        session.onSoundEvent = { event ->
+            audioEngine.play(event)
         }
 
         if (session.bestScore > bestScore) {
@@ -1642,6 +1983,8 @@ private fun NumberMergeApp() {
                     coins = coordinator.coinBalance,
                     onBackHome = coordinator::openHome,
                     onOpenStore = coordinator::openPowerupStore,
+                    soundEnabled = coordinator.soundEnabled,
+                    onToggleSound = coordinator::toggleSound,
                 )
             }
         }
@@ -1662,13 +2005,48 @@ private fun NumberMergeApp() {
 
         AppScreen.POWERUP_STORE -> {
             PowerupStoreScreen(
+                coins = coordinator.coinBalance,
+                message = coordinator.homeMessage,
+                hasActiveSession = coordinator.activeSession != null,
+                offers = coordinator.storeOffers,
                 onBack = coordinator::openHome,
-                onAddCoins = coordinator::addFreeCoins,
-                onAddPowerPack = coordinator::addPowerPack,
+                onBuyOffer = coordinator::purchaseStoreOffer,
             )
         }
     }
 }
+
+@Composable
+private fun GlassPanel(
+    modifier: Modifier = Modifier,
+    accent: Color = PanelBorder,
+    content: @Composable () -> Unit,
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .border(1.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(18.dp)),
+        colors = CardDefaults.cardColors(containerColor = PanelBackground.copy(alpha = 0.75f)),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            PanelBackgroundSoft.copy(alpha = 0.98f),
+                            PanelBackground.copy(alpha = 0.92f),
+                        )
+                    )
+                )
+                .padding(14.dp),
+        ) {
+            content()
+        }
+    }
+}
+
 @Composable
 private fun HomeScreen(
     coins: Int,
@@ -1681,83 +2059,85 @@ private fun HomeScreen(
     onHowToPlay: () -> Unit,
     onPowerupsStore: () -> Unit,
 ) {
+    val heroGradient = Brush.linearGradient(
+        colors = listOf(
+            Color(0xFF7E4B24),
+            Color(0xFF264E90),
+            Color(0xFF55307A),
+        )
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(
-            text = "Easy to play\nHard to Master",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold,
-            color = TextPrimary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Card(
-            colors = CardDefaults.cardColors(containerColor = PanelBackground),
-            shape = RoundedCornerShape(18.dp),
-        ) {
+        GlassPanel(accent = OrangePrimary) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .background(heroGradient, RoundedCornerShape(14.dp))
+                    .padding(18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Box(
                     modifier = Modifier
-                        .background(OrangePrimary, RoundedCornerShape(12.dp))
+                        .background(Color(0x33FFFFFF), RoundedCornerShape(14.dp))
+                        .border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(14.dp))
                         .padding(horizontal = 20.dp, vertical = 10.dp),
                 ) {
                     Text(
                         text = "2048",
                         color = Color.White,
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.Black,
                     )
                 }
                 Text(
                     text = "NumberMerge2048",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = TextPrimary,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color.White,
                     fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
                 )
                 Text(
                     text = "Powered by HADIFY Studio",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary,
+                    color = Color(0xFFF0E7D7),
                 )
             }
         }
 
-        Card(
-            colors = CardDefaults.cardColors(containerColor = BlueAccent),
-            shape = RoundedCornerShape(14.dp),
-        ) {
+        GlassPanel(accent = BlueAccent) {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
+                    .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(text = "💰 $coins", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Box(
+                    modifier = Modifier
+                        .background(Color(0x1A69B3FF), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Text(text = "💰 $coins", color = TextPrimary, fontWeight = FontWeight.Bold)
+                }
                 Spacer(modifier = Modifier.weight(1f))
-                Button(onClick = onClaimCoins) {
+                Button(
+                    onClick = onClaimCoins,
+                    modifier = Modifier.height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
                     Text("Get Coins")
                 }
             }
         }
 
-        Card(
-            colors = CardDefaults.cardColors(containerColor = PanelBackground),
-            shape = RoundedCornerShape(14.dp),
-        ) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        GlassPanel(accent = Color(0xFF8E7DFF)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("News & Updates", fontWeight = FontWeight.Bold, color = TextPrimary)
                 Text(
                     "Best score: $bestScore\nDaily challenges and power-ups are now available.",
@@ -1768,50 +2148,49 @@ private fun HomeScreen(
 
         HomeActionButton(
             label = "New Game",
-            subtitle = "Choose board size",
+            subtitle = "Choose your board and start fresh",
             color = OrangePrimary,
+            iconEmoji = "🎮",
             onClick = onNewGame,
         )
 
         HomeActionButton(
             label = "Continue",
-            subtitle = "Resume your latest run",
-            color = OrangePrimary,
+            subtitle = "Resume your latest run instantly",
+            color = Color(0xFF41B17A),
+            iconEmoji = "🔁",
             onClick = onContinue,
         )
 
         HomeActionButton(
             label = "Daily Challenges",
             subtitle = "Earn extra coins",
-            color = GreenPrimary,
+            color = Color(0xFF4A80D5),
+            iconEmoji = "🏆",
             onClick = onDailyChallenges,
         )
 
         HomeActionButton(
             label = "How To Play",
             subtitle = "Rules and controls",
-            color = BlueAccent,
+            color = Color(0xFF585D75),
+            iconEmoji = "❓",
             onClick = onHowToPlay,
-            textColor = TextPrimary,
         )
 
         HomeActionButton(
             label = "Power-ups Store",
             subtitle = "Get boost packs",
-            color = BlueAccent,
+            color = Color(0xFF7E5ABF),
+            iconEmoji = "⚡",
             onClick = onPowerupsStore,
-            textColor = TextPrimary,
         )
 
         if (!message.isNullOrBlank()) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CC)),
-                shape = RoundedCornerShape(12.dp),
-            ) {
+            GlassPanel(accent = OrangePrimary) {
                 Text(
                     text = message,
                     color = TextPrimary,
-                    modifier = Modifier.padding(12.dp),
                 )
             }
         }
@@ -1823,19 +2202,50 @@ private fun HomeActionButton(
     label: String,
     subtitle: String,
     color: Color,
+    iconEmoji: String,
     onClick: () -> Unit,
-    textColor: Color = Color.White,
+    textColor: Color? = null,
 ) {
+    val cardColor by animateColorAsState(
+        targetValue = color,
+        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+        label = "homeActionColor",
+    )
+    val resolvedTextColor = textColor ?: readableTextOn(cardColor)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .border(1.dp, PanelBorder, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = color),
-        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = cardColor.copy(alpha = 0.92f)),
+        shape = RoundedCornerShape(16.dp),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text(text = label, color = textColor, fontWeight = FontWeight.Bold)
-            Text(text = subtitle, color = textColor.copy(alpha = 0.88f))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(resolvedTextColor.copy(alpha = 0.16f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(iconEmoji, color = resolvedTextColor)
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(text = label, color = resolvedTextColor, fontWeight = FontWeight.Bold)
+                Text(text = subtitle, color = resolvedTextColor.copy(alpha = 0.88f))
+            }
+            Text("›", color = resolvedTextColor, style = MaterialTheme.typography.titleLarge)
         }
     }
 }
@@ -1852,17 +2262,26 @@ private fun BoardSizeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
             }
             Text(
-                text = "Select Board Size",
+                text = "New Game",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+            )
+        }
+
+        GlassPanel(accent = BlueAccent) {
+            Text(
+                text = "Pick a board that matches your play style.",
+                color = TextSecondary,
             )
         }
 
@@ -1877,22 +2296,41 @@ private fun BoardSizeScreen(
             }
         }
 
-        Card(colors = CardDefaults.cardColors(containerColor = PanelBackground)) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("About this size", fontWeight = FontWeight.Bold)
+        GlassPanel(accent = OrangePrimary) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("About this size", fontWeight = FontWeight.Bold, color = TextPrimary)
                 Text(boardDescription(selectedSize), color = TextSecondary)
             }
         }
 
-        Button(onClick = onContinue, enabled = canContinue, modifier = Modifier.fillMaxWidth()) {
+        Button(
+            onClick = onContinue,
+            enabled = canContinue,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = RoundedCornerShape(14.dp),
+        ) {
             Text("Continue Previous Game")
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+            ) {
                 Text("Cancel")
             }
-            Button(onClick = onStart, modifier = Modifier.weight(1f)) {
+            Button(
+                onClick = onStart,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+            ) {
                 Text("Start New Game")
             }
         }
@@ -1906,30 +2344,73 @@ private fun BoardSizeCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val background = if (selected) OrangePrimary else PanelBackground
+    val background = if (selected) OrangePrimary else PanelBackgroundSoft
     val textColor = if (selected) Color.White else TextPrimary
 
     Card(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier
+            .border(1.dp, if (selected) OrangePrimary.copy(alpha = 0.9f) else PanelBorder, RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = background),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
+                .padding(vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
+            BoardSizePreview(size = size, selected = selected)
             Text(text = "${size}×${size}", color = textColor, fontWeight = FontWeight.ExtraBold)
+            Text(
+                text = when (size) {
+                    4 -> "Classic"
+                    5 -> "Bigger"
+                    else -> "Largest"
+                },
+                color = textColor.copy(alpha = 0.85f),
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BoardSizePreview(size: Int, selected: Boolean) {
+    val cellColor = if (selected) Color(0x40FFFFFF) else Color(0x35FFFFFF)
+    val rowCount = when (size) {
+        4 -> 3
+        5 -> 4
+        else -> 5
+    }
+
+    Column(
+        modifier = Modifier
+            .padding(bottom = 6.dp)
+            .background(Color(0x22FFFFFF), RoundedCornerShape(8.dp))
+            .padding(horizontal = 6.dp, vertical = 5.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        repeat(rowCount) {
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                repeat(rowCount) {
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .background(cellColor, RoundedCornerShape(2.dp))
+                    )
+                }
+            }
         }
     }
 }
 
 private fun boardDescription(size: Int): String {
     return when (size) {
-        4 -> "Classic mode. Fast rounds and straightforward strategy."
-        5 -> "Balanced mode with extra space and longer sessions."
-        6 -> "Large board with high-scoring potential and deeper planning."
+        4 -> "Classic mode. Fast pace, clean decisions, short intense rounds."
+        5 -> "Balanced mode. More space for combos and tactical recoveries."
+        6 -> "Strategic mode. Huge board for marathon runs and high scores."
         else -> "Custom board size."
     }
 }
@@ -1950,16 +2431,23 @@ private fun DailyChallengesScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
             }
-            Text(header, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                header,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+            )
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ChallengeTier.values().forEach { tier ->
-                val total = challenges.count { it.definition.tier == tier }
-                val done = challenges.count { it.definition.tier == tier && it.completed }
-                DifficultyPill(tier.label, "$done/$total")
+        GlassPanel(accent = BlueAccent) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChallengeTier.values().forEach { tier ->
+                    val total = challenges.count { it.definition.tier == tier }
+                    val done = challenges.count { it.definition.tier == tier && it.completed }
+                    DifficultyPill(tier.label, "$done/$total")
+                }
             }
         }
 
@@ -1981,23 +2469,30 @@ private fun DailyChallengeCard(
 ) {
     val definition = challenge.definition
     val progressText = bestProgressLabel(challenge)
+    val progressTarget = (definition.chainStages.size * 100).coerceAtLeast(1)
+    val progressFraction = (challenge.bestProgress.toFloat() / progressTarget.toFloat()).coerceIn(0f, 1f)
 
-    val cardColor = when {
-        challenge.completed && challenge.claimed -> Color(0xFFE5F6E9)
-        challenge.completed -> Color(0xFFFFF2C5)
-        challenge.unlocked -> PanelBackground
-        else -> Color(0xFFEDE7DD)
-    }
+    val cardColor by animateColorAsState(
+        targetValue = when {
+            challenge.completed && challenge.claimed -> Color(0xFF254333)
+            challenge.completed -> Color(0xFF4B3D23)
+            challenge.unlocked -> PanelBackgroundSoft
+            else -> Color(0xFF2C2A33)
+        },
+        animationSpec = tween(durationMillis = 350),
+        label = "challengeCardColor",
+    )
 
     Card(
         colors = CardDefaults.cardColors(containerColor = cardColor),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .border(1.dp, PanelBorder, RoundedCornerShape(16.dp))
                 .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(definition.title, fontWeight = FontWeight.Bold, color = TextPrimary)
@@ -2006,9 +2501,24 @@ private fun DailyChallengeCard(
             }
 
             Text(definition.description, color = TextSecondary)
-            Text("Board ${definition.boardSize}x${definition.boardSize} • Reward ${definition.rewardCoins} coins", color = TextSecondary)
+            Text(
+                "Board ${definition.boardSize}x${definition.boardSize} • Reward ${definition.rewardCoins} coins",
+                color = TextSecondary,
+            )
             Text(chainSummary(definition.chainStages), color = TextSecondary)
             Text(progressText, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+            LinearProgressIndicator(
+                progress = { progressFraction },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp),
+                color = when {
+                    challenge.completed -> GreenPrimary
+                    challenge.unlocked -> OrangePrimary
+                    else -> Color(0xFF605A6C)
+                },
+                trackColor = Color(0x33FFFFFF),
+            )
             Text(challenge.statusNote, color = TextSecondary)
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2046,16 +2556,16 @@ private fun DailyChallengeCard(
 private fun RowScope.DifficultyPill(label: String, progress: String) {
     Card(
         modifier = Modifier.weight(1f),
-        colors = CardDefaults.cardColors(containerColor = PanelBackground),
-        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = PanelBackgroundSoft),
+        shape = RoundedCornerShape(14.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(progress, fontWeight = FontWeight.Bold)
+            Text(progress, fontWeight = FontWeight.Bold, color = TextPrimary)
             Text(label, color = TextSecondary)
         }
     }
@@ -2072,18 +2582,23 @@ private fun HowToPlayScreen(onBack: () -> Unit) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
             }
-            Text("How To Play", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                "How To Play",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+            )
         }
 
-        Card(colors = CardDefaults.cardColors(containerColor = PanelBackground)) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("1. Swipe the board to move all tiles.")
-                Text("2. Same-number tiles merge into a bigger tile.")
-                Text("3. Reach 2048 to win, then keep pushing score.")
-                Text("4. Use power-ups: Swap, Undo, Bomb, Freeze.")
-                Text("5. Bigger boards (5x5 / 6x6) allow longer runs.")
+        GlassPanel(accent = BlueAccent) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("1. Swipe the board to move all tiles.", color = TextPrimary)
+                Text("2. Same-number tiles merge into a bigger tile.", color = TextPrimary)
+                Text("3. Reach 2048 to win, then keep pushing score.", color = TextPrimary)
+                Text("4. Use power-ups: Swap, Undo, Bomb, Freeze.", color = TextPrimary)
+                Text("5. Bigger boards (5x5 / 6x6) allow longer runs.", color = TextPrimary)
             }
         }
     }
@@ -2091,64 +2606,184 @@ private fun HowToPlayScreen(onBack: () -> Unit) {
 
 @Composable
 private fun PowerupStoreScreen(
+    coins: Int,
+    message: String?,
+    hasActiveSession: Boolean,
+    offers: List<StoreOffer>,
     onBack: () -> Unit,
-    onAddCoins: () -> Unit,
-    onAddPowerPack: () -> Unit,
+    onBuyOffer: (String) -> Unit,
 ) {
+    val utilityOffers = offers.filter { it.category == StoreCategory.UTILITY }
+    val singleOffers = offers.filter { it.category == StoreCategory.SINGLE_CHARGE }
+    val packOffers = offers.filter { it.category == StoreCategory.PACK }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
             }
-            Text("Power-ups Store", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                "Power-ups Store",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+            )
         }
 
-        StoreCard(
-            title = "Coin Booster",
-            description = "Add 120 coins to your wallet.",
-            buttonText = "Collect",
-            icon = Icons.Default.ShoppingCart,
-            onClick = onAddCoins,
+        GlassPanel(accent = BlueAccent) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Wallet", color = TextSecondary)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text("💰 $coins", fontWeight = FontWeight.Bold, color = TextPrimary)
+                }
+                Text(
+                    text = if (hasActiveSession) {
+                        "Active run connected. Purchased power-ups will be applied instantly."
+                    } else {
+                        "No active run. Start or continue a game to buy power-up charges."
+                    },
+                    color = TextSecondary,
+                )
+            }
+        }
+
+        StoreSection(
+            title = "Utility",
+            subtitle = "Quick resources for progression",
+            offers = utilityOffers,
+            walletCoins = coins,
+            hasActiveSession = hasActiveSession,
+            onBuyOffer = onBuyOffer,
+        )
+        StoreSection(
+            title = "Single Charges",
+            subtitle = "Buy exactly what you need",
+            offers = singleOffers,
+            walletCoins = coins,
+            hasActiveSession = hasActiveSession,
+            onBuyOffer = onBuyOffer,
+        )
+        StoreSection(
+            title = "Power Packs",
+            subtitle = "Best value bundles for long runs",
+            offers = packOffers,
+            walletCoins = coins,
+            hasActiveSession = hasActiveSession,
+            onBuyOffer = onBuyOffer,
         )
 
-        StoreCard(
-            title = "Starter Power Pack",
-            description = "Swap +2, Undo +2, Bomb +1, Freeze +1.",
-            buttonText = "Apply",
-            icon = Icons.Default.Menu,
-            onClick = onAddPowerPack,
-        )
+        if (!message.isNullOrBlank()) {
+            GlassPanel(accent = OrangePrimary) {
+                Text(message, color = TextPrimary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoreSection(
+    title: String,
+    subtitle: String,
+    offers: List<StoreOffer>,
+    walletCoins: Int,
+    hasActiveSession: Boolean,
+    onBuyOffer: (String) -> Unit,
+) {
+    if (offers.isEmpty()) return
+
+    GlassPanel(accent = PanelBorder) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text(subtitle, color = TextSecondary)
+            offers.forEach { offer ->
+                StoreCard(
+                    offer = offer,
+                    walletCoins = walletCoins,
+                    hasActiveSession = hasActiveSession,
+                    onClick = { onBuyOffer(offer.id) },
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun StoreCard(
-    title: String,
-    description: String,
-    buttonText: String,
-    icon: ImageVector,
+    offer: StoreOffer,
+    walletCoins: Int,
+    hasActiveSession: Boolean,
     onClick: () -> Unit,
 ) {
-    Card(colors = CardDefaults.cardColors(containerColor = PanelBackground)) {
+    val requiresRun = offer.requiresActiveSession()
+    val hasRun = !requiresRun || hasActiveSession
+    val canAfford = walletCoins >= offer.priceCoins
+    val canBuy = hasRun && canAfford
+    val actionText = when {
+        !hasRun -> "Start Run"
+        offer.priceCoins <= 0 -> offer.ctaLabel
+        else -> "${offer.ctaLabel} ${offer.priceCoins}"
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = PanelBackgroundSoft),
+        shape = RoundedCornerShape(16.dp),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .border(1.dp, offer.accent.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(icon, contentDescription = null, tint = OrangePrimary)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Bold)
-                Text(description, color = TextSecondary)
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(offer.accent.copy(alpha = 0.16f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    offer.iconRes != null -> Icon(
+                        painter = painterResource(id = offer.iconRes),
+                        contentDescription = null,
+                        tint = offer.accent,
+                    )
+
+                    offer.iconVector != null -> Icon(
+                        imageVector = offer.iconVector,
+                        contentDescription = null,
+                        tint = offer.accent,
+                    )
+
+                    else -> Text("⚡", color = TextPrimary)
+                }
             }
-            Button(onClick = onClick) {
-                Text(buttonText)
+
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(offer.title, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(offer.description, color = TextSecondary)
+                Text(offer.rewardSummary(), color = offer.accent, fontWeight = FontWeight.SemiBold)
+                if (!hasRun && requiresRun) {
+                    Text("Requires active run", color = Color(0xFFFF9E9E))
+                } else if (!canAfford) {
+                    Text("Need ${offer.priceCoins} coins", color = Color(0xFFFF9E9E))
+                }
+            }
+
+            Button(
+                enabled = canBuy,
+                onClick = onClick,
+                modifier = Modifier.height(46.dp),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text(actionText)
             }
         }
     }
@@ -2159,6 +2794,8 @@ private fun GameScreen(
     coins: Int,
     onBackHome: () -> Unit,
     onOpenStore: () -> Unit,
+    soundEnabled: Boolean,
+    onToggleSound: () -> Unit,
 ) {
     val boardRows = remember(session.boardVersion, session.powerMode) {
         session.boardRows()
@@ -2166,70 +2803,95 @@ private fun GameScreen(
     val challengeState = remember(session.boardVersion) {
         session.challengeUiState()
     }
+    val infoTone by animateColorAsState(
+        targetValue = when {
+            session.infoMessage.contains("Need") -> Color(0xFF7A2E2E)
+            session.infoMessage.contains("completed", ignoreCase = true) -> Color(0xFF2E6043)
+            else -> Color(0xFF27415E)
+        },
+        animationSpec = tween(300),
+        label = "infoTone",
+    )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconButton(onClick = onBackHome) {
-                Icon(Icons.Default.Home, contentDescription = "Home")
+                Icon(Icons.Default.Home, contentDescription = "Home", tint = TextPrimary)
             }
-            IconButton(onClick = {}) {
-                Icon(Icons.Default.Menu, contentDescription = "Menu")
+            IconButton(onClick = onOpenStore) {
+                Icon(Icons.Default.ShoppingCart, contentDescription = "Open store", tint = TextPrimary)
+            }
+            IconButton(
+                onClick = onToggleSound,
+                modifier = Modifier.semantics {
+                    contentDescription = if (soundEnabled) "Mute sound" else "Enable sound"
+                },
+            ) {
+                Icon(
+                    painter = painterResource(
+                        id = if (soundEnabled) R.drawable.ic_sound_on else R.drawable.ic_sound_off
+                    ),
+                    contentDescription = null,
+                    tint = TextPrimary,
+                )
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Score: ${session.score}", fontWeight = FontWeight.Bold, color = TextPrimary)
-                Text("Best: ${session.bestScore}", color = TextSecondary)
+                Text("🏁 ${session.score}", fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+                Text("⭐ ${session.bestScore}", color = TextSecondary)
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
             Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = BlueAccent,
+                shape = RoundedCornerShape(12.dp),
+                color = PanelBackgroundSoft,
             ) {
                 Text(
                     text = "💰 $coins",
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                     fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
                 )
             }
         }
 
         Card(
-            colors = CardDefaults.cardColors(containerColor = BlueAccent),
-            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = infoTone),
+            shape = RoundedCornerShape(14.dp),
         ) {
             Text(
                 text = session.infoMessage,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(10.dp),
-                color = TextPrimary,
+                    .padding(12.dp),
+                color = Color.White,
             )
         }
 
         if (challengeState != null) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE5B4)),
-                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = PanelBackgroundSoft),
+                shape = RoundedCornerShape(14.dp),
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                        .border(1.dp, PanelBorder, RoundedCornerShape(14.dp))
+                        .padding(11.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
-                    Text("Challenge: ${challengeState.title}", fontWeight = FontWeight.Bold)
+                    Text("Challenge: ${challengeState.title}", fontWeight = FontWeight.Bold, color = TextPrimary)
                     Text(challengeState.description, color = TextSecondary)
                     Text(challengeState.stageText, color = TextSecondary)
-                    Text(challengeState.progressText, fontWeight = FontWeight.SemiBold)
+                    Text(challengeState.progressText, fontWeight = FontWeight.SemiBold, color = Color(0xFFFFD27B))
                     Text(challengeState.statusText, color = TextSecondary)
                 }
             }
@@ -2248,7 +2910,7 @@ private fun GameScreen(
             PowerUpButton(
                 label = "Swap",
                 count = session.swapCount,
-                icon = Icons.Default.Menu,
+                iconRes = R.drawable.ic_power_swap,
                 active = session.powerMode is PowerMode.SwapFirst || session.powerMode is PowerMode.SwapSecond,
                 onClick = session::activateSwap,
                 modifier = Modifier.weight(1f),
@@ -2256,7 +2918,7 @@ private fun GameScreen(
             PowerUpButton(
                 label = "Undo",
                 count = session.undoCount,
-                icon = Icons.Default.ArrowBack,
+                iconRes = R.drawable.ic_power_undo,
                 active = false,
                 onClick = session::activateUndo,
                 modifier = Modifier.weight(1f),
@@ -2264,7 +2926,7 @@ private fun GameScreen(
             PowerUpButton(
                 label = "Bomb",
                 count = session.bombCount,
-                icon = Icons.Default.ShoppingCart,
+                iconRes = R.drawable.ic_power_bomb,
                 active = session.powerMode is PowerMode.Bomb,
                 onClick = session::activateBomb,
                 modifier = Modifier.weight(1f),
@@ -2272,7 +2934,7 @@ private fun GameScreen(
             PowerUpButton(
                 label = "Freeze",
                 count = session.freezeCount,
-                icon = Icons.Default.Home,
+                iconRes = R.drawable.ic_power_freeze,
                 active = session.powerMode is PowerMode.Freeze,
                 onClick = session::activateFreeze,
                 modifier = Modifier.weight(1f),
@@ -2280,12 +2942,20 @@ private fun GameScreen(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = onOpenStore, modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = onOpenStore,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(14.dp),
+            ) {
                 Icon(Icons.Default.ShoppingCart, contentDescription = null)
                 Spacer(modifier = Modifier.size(6.dp))
                 Text("Store")
             }
-            OutlinedButton(onClick = session::onShareTapped, modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = session::onShareTapped,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(14.dp),
+            ) {
                 Icon(Icons.Default.Share, contentDescription = null)
                 Spacer(modifier = Modifier.size(6.dp))
                 Text("Share")
@@ -2297,7 +2967,9 @@ private fun GameScreen(
                 text = "2048 reached. Keep pushing your score!",
                 color = GreenPrimary,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp),
                 textAlign = TextAlign.Center,
             )
         }
@@ -2333,9 +3005,17 @@ private fun GameBoard(
 
     Box(
         modifier = modifier
-            .background(BoardBackground, RoundedCornerShape(18.dp))
-            .padding(8.dp)
-            .border(2.dp, Color(0x33FFFFFF), RoundedCornerShape(18.dp))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        BoardBackground,
+                        Color(0xFF262230),
+                    )
+                ),
+                RoundedCornerShape(20.dp),
+            )
+            .padding(10.dp)
+            .border(1.dp, PanelBorder, RoundedCornerShape(20.dp))
             .pointerInput(tiles) {
                 detectDragGestures(
                     onDragStart = { dragOffset = Offset.Zero },
@@ -2352,12 +3032,12 @@ private fun GameBoard(
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
         ) {
             tiles.forEach { row ->
                 Row(
                     modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(9.dp),
                 ) {
                     row.forEach { tile ->
                         TileCard(
@@ -2380,13 +3060,29 @@ private fun TileCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val (backgroundColor, textColor) = tileColors(tile.value)
+    val (targetBackgroundColor, targetTextColor) = tileColors(tile.value)
+    val backgroundColor by animateColorAsState(
+        targetValue = targetBackgroundColor,
+        animationSpec = tween(160),
+        label = "tileBackground",
+    )
+    val textColor by animateColorAsState(
+        targetValue = targetTextColor,
+        animationSpec = tween(160),
+        label = "tileText",
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (tile.value == 0) 1f else 1.015f,
+        animationSpec = tween(150, easing = FastOutSlowInEasing),
+        label = "tileScale",
+    )
 
     Box(
         modifier = modifier
+            .scale(scale)
             .border(
-                width = if (tile.selected) 3.dp else 0.dp,
-                color = SelectionColor,
+                width = if (tile.selected) 2.dp else 0.dp,
+                color = if (tile.selected) SelectionColor else Color.Transparent,
                 shape = RoundedCornerShape(12.dp),
             )
             .background(backgroundColor, RoundedCornerShape(12.dp))
@@ -2420,17 +3116,29 @@ private fun TileCard(
 private fun PowerUpButton(
     label: String,
     count: Int,
-    icon: ImageVector,
+    iconRes: Int,
     active: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val background = if (active) Color(0xFF3B64F3) else Color(0xFFF2EFE8)
-    val contentColor = if (active) Color.White else TextPrimary
+    val background by animateColorAsState(
+        targetValue = when {
+            active -> Color(0xFF4E76FF)
+            count <= 0 -> PanelBackgroundSoft
+            else -> Color(0xFF2D3140)
+        },
+        animationSpec = tween(220),
+        label = "powerBg",
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (active) Color.White else TextPrimary,
+        animationSpec = tween(220),
+        label = "powerFg",
+    )
 
     Card(
         modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(13.dp),
         colors = CardDefaults.cardColors(containerColor = background),
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
@@ -2441,7 +3149,11 @@ private fun PowerUpButton(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Icon(icon, contentDescription = label, tint = contentColor)
+                Icon(
+                    painter = painterResource(id = iconRes),
+                    contentDescription = label,
+                    tint = contentColor,
+                )
                 Text(label, color = contentColor)
             }
 
@@ -2480,19 +3192,17 @@ private fun resolveDirection(offset: Offset, threshold: Float): Direction? {
 private fun tileColors(value: Int): Pair<Color, Color> {
     return when (value) {
         0 -> EmptyTileColor to Color.Transparent
-        2 -> Color(0xFFEEE4DA) to Color(0xFF776E65)
-        4 -> Color(0xFFEDE0C8) to Color(0xFF776E65)
-        8 -> Color(0xFFF2B179) to Color.White
-        16 -> Color(0xFFF59563) to Color.White
-        32 -> Color(0xFFF67C5F) to Color.White
-        64 -> Color(0xFFF65E3B) to Color.White
-        128 -> Color(0xFFEDCF72) to Color.White
-        256 -> Color(0xFFEDCC61) to Color.White
-        512 -> Color(0xFFEDC850) to Color.White
-        1024 -> Color(0xFFEDC53F) to Color.White
-        2048 -> Color(0xFFEDC22E) to Color.White
-        else -> Color(0xFF3C3A32) to Color.White
+        2 -> Color(0xFF3F3A4A) to Color(0xFFF1EBDF)
+        4 -> Color(0xFF4B4458) to Color(0xFFF1EBDF)
+        8 -> Color(0xFF78543A) to Color.White
+        16 -> Color(0xFF8F5135) to Color.White
+        32 -> Color(0xFFA64B32) to Color.White
+        64 -> Color(0xFFBF4331) to Color.White
+        128 -> Color(0xFFCA8D38) to Color.White
+        256 -> Color(0xFFD3A032) to Color.White
+        512 -> Color(0xFFDDB42C) to Color.White
+        1024 -> Color(0xFFE8C42A) to Color(0xFF372A14)
+        2048 -> Color(0xFFF4D544) to Color(0xFF372A14)
+        else -> lerp(Color(0xFF9A67F8), Color(0xFFDA7EFF), 0.5f) to Color.White
     }
 }
-
-
