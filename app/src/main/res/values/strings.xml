@@ -1,4 +1,111 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">NumberMerge2048</string>
+    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
+    <string name="common_back">Back</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_store">Store</string>
+    <string name="common_share">Share</string>
+    <string name="common_back_press_again_to_exit">Press back again to exit</string>
+
+    <string name="home_logo">2048</string>
+    <string name="home_brand_title">NumberMerge2048</string>
+    <string name="home_powered_by">Powered by HADIFY Studio</string>
+    <string name="home_coins_format">Coins: %1$d</string>
+    <string name="home_get_coins">+ Coins</string>
+    <string name="home_news_title">Best</string>
+    <string name="home_news_body">%1$d</string>
+    <string name="home_new_game">New</string>
+    <string name="home_new_game_subtitle">Pick board and begin</string>
+    <string name="home_continue">Continue</string>
+    <string name="home_continue_subtitle">Jump back into your run</string>
+    <string name="home_daily_challenges">Challenges</string>
+    <string name="home_daily_challenges_subtitle">Win bonus coins</string>
+    <string name="home_how_to_play">How</string>
+    <string name="home_how_to_play_subtitle">Quick rules</string>
+    <string name="home_powerups_store">Store</string>
+    <string name="home_powerups_store_subtitle">Buy charge packs</string>
+
+    <string name="board_setup_title">New</string>
+    <string name="board_setup_pick_style">Choose your board.</string>
+    <string name="board_setup_about_size">Board notes</string>
+    <string name="board_setup_difficulty">Mode</string>
+    <string name="board_setup_continue_format">Continue %1$s</string>
+    <string name="board_setup_start_new_game">Start</string>
+    <string name="board_size_format">%1$dx%2$d</string>
+    <string name="board_size_classic">Classic</string>
+    <string name="board_size_bigger">Bigger</string>
+    <string name="board_size_largest">Largest</string>
+    <string name="board_desc_classic">Fast and punchy runs.</string>
+    <string name="board_desc_bigger">Balanced space and control.</string>
+    <string name="board_desc_largest">Long strategic runs.</string>
+    <string name="board_desc_custom">Custom size.</string>
+
+    <string name="daily_board_reward_format">%1$dx%2$d | +%3$d coins</string>
+    <string name="daily_chain_stages_format">Chain: %1$d stages</string>
+    <string name="daily_locked">Locked</string>
+    <string name="daily_claim_reward">Claim</string>
+    <string name="daily_claimed">Claimed</string>
+    <string name="daily_start_challenge">Play</string>
+
+    <string name="how_to_play_title">How</string>
+    <string name="how_to_play_step_1">1. Swipe to move tiles.</string>
+    <string name="how_to_play_step_2">2. Match equal tiles to merge.</string>
+    <string name="how_to_play_step_3">3. Hit 2048, then push score.</string>
+    <string name="how_to_play_step_4">4. Powers: Swap, Undo, Bomb, Freeze.</string>
+    <string name="how_to_play_step_5">5. Bigger boards mean longer runs.</string>
+
+    <string name="store_title">Store</string>
+    <string name="store_wallet">$</string>
+    <string name="store_coins_format">Coins: %1$d</string>
+    <string name="store_low_coins_title">Need coins</string>
+    <string name="store_low_coins_subtitle_format">Short by %1$d. Watch ad.</string>
+    <string name="store_reward_anytime_title">Free coins</string>
+    <string name="store_reward_anytime_subtitle_format">Watch ad: +%1$d</string>
+    <string name="store_watch_rewarded_format">Watch Ad +%1$d</string>
+    <string name="store_reward_loading">Rewarded ad loading...</string>
+    <string name="store_active_connected">Active run connected. Purchases apply now.</string>
+    <string name="store_run_ended">Run over. Start a new run to apply charges.</string>
+    <string name="store_no_active">No active run. Start a game to buy charges.</string>
+    <string name="store_utility">Kit</string>
+    <string name="store_utility_subtitle">Quick tactical boosts</string>
+    <string name="store_single_charges">Single</string>
+    <string name="store_single_charges_subtitle">Single-use refills</string>
+    <string name="store_power_packs">Packs</string>
+    <string name="store_power_packs_subtitle">Value bundles</string>
+    <string name="store_start_run">Start Game</string>
+    <string name="store_start_short">Run</string>
+    <string name="store_buy_short">Buy</string>
+    <string name="store_run_tag">Run</string>
+    <string name="store_need_tag">Coins</string>
+    <string name="store_action_with_price">%1$s %2$d</string>
+    <string name="store_requires_active_run">Active run required</string>
+    <string name="store_run_ended_requires_restart">Run ended. Start again.</string>
+    <string name="store_need_coins_format">Need %1$d</string>
+    <string name="store_fallback_icon">?</string>
+
+    <string name="game_home">Home</string>
+    <string name="game_open_store">Open store</string>
+    <string name="game_mute_sound">Mute sound</string>
+    <string name="game_enable_sound">Enable sound</string>
+    <string name="game_score_format">Score %1$d</string>
+    <string name="game_best_format">Best %1$d</string>
+    <string name="game_stat_score">Score</string>
+    <string name="game_stat_best">Best</string>
+    <string name="game_stat_board">Board</string>
+    <string name="game_coins_compact">$ %1$d</string>
+    <string name="game_board_difficulty_format">%1$dx%2$d | %3$s</string>
+    <string name="game_challenge_title_format">Challenge | %1$s</string>
+    <string name="game_power_swap">Swap</string>
+    <string name="game_power_undo">Undo</string>
+    <string name="game_power_bomb">Bomb</string>
+    <string name="game_power_freeze">Freeze</string>
+    <string name="game_reached_2048">2048!</string>
+    <string name="game_over_title">Over</string>
+    <string name="game_over_message">No moves left.</string>
+    <string name="game_play_again">Again</string>
+    <string name="game_frozen_turns_format">F %1$d</string>
+
+    <string name="ad_reward_received_format">Ad reward received: +%1$d coins.</string>
+    <string name="ad_not_ready_try_again">Ad is loading. Try again in a moment.</string>
 </resources>

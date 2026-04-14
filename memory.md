@@ -12,8 +12,27 @@ The goal is to keep the same package name and ship updates again.
 ## 2) Current build/config status
 
 - Tech: Native Android, Kotlin, Jetpack Compose (single activity).
-- Main app logic is currently centralized in:
-  - `app/src/main/java/com/hadify/NumberMerge2048/MainActivity.kt`
+- Main app logic is now modularized across:
+  - app shell + theme tokens:
+    - `app/src/main/java/com/hadify/NumberMerge2048/MainActivity.kt`
+  - UI app entry:
+    - `app/src/main/java/com/hadify/NumberMerge2048/ui/UiScreens.kt`
+  - shared UI components:
+    - `app/src/main/java/com/hadify/NumberMerge2048/ui/components/GlassPanel.kt`
+  - screen modules:
+    - `app/src/main/java/com/hadify/NumberMerge2048/ui/screens/HomeScreen.kt`
+    - `app/src/main/java/com/hadify/NumberMerge2048/ui/screens/BoardSetupScreen.kt`
+    - `app/src/main/java/com/hadify/NumberMerge2048/ui/screens/DailyChallengesScreen.kt`
+    - `app/src/main/java/com/hadify/NumberMerge2048/ui/screens/HowToPlayScreen.kt`
+    - `app/src/main/java/com/hadify/NumberMerge2048/ui/screens/PowerupStoreScreen.kt`
+    - `app/src/main/java/com/hadify/NumberMerge2048/ui/screens/GameScreen.kt`
+  - core models/session/coordinator/persistence:
+    - `app/src/main/java/com/hadify/NumberMerge2048/core/CoreModels.kt`
+    - `app/src/main/java/com/hadify/NumberMerge2048/core/Persistence.kt`
+    - `app/src/main/java/com/hadify/NumberMerge2048/core/DailyChallengeFactory.kt`
+    - `app/src/main/java/com/hadify/NumberMerge2048/core/GameSession.kt`
+    - `app/src/main/java/com/hadify/NumberMerge2048/core/AppCoordinator.kt`
+    - `app/src/main/java/com/hadify/NumberMerge2048/core/StoreCatalog.kt`
 - Build config:
   - `compileSdk = 36`
   - `targetSdk = 36`
@@ -100,6 +119,9 @@ The goal is to keep the same package name and ship updates again.
 - App icon drawable added:
   - `ic_app_icon.xml`
 - Manifest icon refs added.
+- Screen-level user-facing text has been moved to:
+  - `app/src/main/res/values/strings.xml`
+- Deprecated back icon usage in screen modules was updated to AutoMirrored icons.
 
 ## 4) Persistence (important)
 
@@ -108,23 +130,62 @@ The goal is to keep the same package name and ship updates again.
 - `coinBalance`
 - `bestScore`
 - `homeDailyClaimed`
+- `boardSizeSelection`
+- `soundEnabled`
 - challenge state:
   - unlocked
   - completed
   - claimed
   - bestProgress
   - statusNote
+- full session snapshots:
+  - per-size regular runs
+  - active challenge run (when active)
+  - board values
+  - frozen-turn map
+  - score/best score/coins
+  - power charges and selected power mode
+  - undo stack snapshots
+  - challenge runtime counters (stage index, move/power usage, completion/failure)
 - day key for daily challenge cycle
 
 ### Not fully persisted yet
 
-- Active run full state after app kill/restart (board tiles, frozen tiles, undo stack, exact session resume) is not fully restored from disk.
-- Difficulty system (true Easy/Medium/Hard with spawn tuning/power tuning) is not implemented as a dedicated selectable system yet.
+- Difficulty metadata is persisted, but legacy runs created before difficulty support may be normalized to Medium on first re-save.
+
+## 4.1) Difficulty system (recently completed)
+
+- Real selectable difficulty added: Easy / Medium / Hard.
+- Difficulty is selected in board setup screen and persisted.
+- Continue by selection now uses board-size + difficulty slot.
+- Gameplay impact implemented:
+  - different starting power-up charges per difficulty
+  - different tile spawn rates (chance of `4` tile)
+  - Easy-only chance for bonus extra tile spawn after a move
+  - power-up coin cost delta by difficulty
+  - coin reward scaling from merges by difficulty
+- Challenge runs currently start on Medium for balance consistency.
 
 ## 5) Key files
 
-- Main logic/UI:
+- App shell/theme:
   - `app/src/main/java/com/hadify/NumberMerge2048/MainActivity.kt`
+- UI screens:
+  - `app/src/main/java/com/hadify/NumberMerge2048/ui/UiScreens.kt`
+  - `app/src/main/java/com/hadify/NumberMerge2048/ui/components/GlassPanel.kt`
+  - `app/src/main/java/com/hadify/NumberMerge2048/ui/screens/HomeScreen.kt`
+  - `app/src/main/java/com/hadify/NumberMerge2048/ui/screens/BoardSetupScreen.kt`
+  - `app/src/main/java/com/hadify/NumberMerge2048/ui/screens/DailyChallengesScreen.kt`
+  - `app/src/main/java/com/hadify/NumberMerge2048/ui/screens/HowToPlayScreen.kt`
+  - `app/src/main/java/com/hadify/NumberMerge2048/ui/screens/PowerupStoreScreen.kt`
+  - `app/src/main/java/com/hadify/NumberMerge2048/ui/screens/GameScreen.kt`
+- Core gameplay/state:
+  - `app/src/main/java/com/hadify/NumberMerge2048/core/CoreModels.kt`
+  - `app/src/main/java/com/hadify/NumberMerge2048/core/GameSession.kt`
+  - `app/src/main/java/com/hadify/NumberMerge2048/core/AppCoordinator.kt`
+  - `app/src/main/java/com/hadify/NumberMerge2048/core/Persistence.kt`
+  - `app/src/main/java/com/hadify/NumberMerge2048/core/DailyChallengeFactory.kt`
+  - `app/src/main/java/com/hadify/NumberMerge2048/core/StoreCatalog.kt`
 - Build config:
   - `app/build.gradle.kts`
 - Manifest:
@@ -190,13 +251,64 @@ adb install -r .\app\build\outputs\apk\debug\app-debug.apk
 
 ## 9) Recommended next tasks in new chat
 
-1. Implement full persistent active-run restore (board/score/moves/power state).
-2. Add real selectable difficulty (Easy/Medium/Hard) with gameplay impact.
-3. Split `MainActivity.kt` (currently very large) into modules/files:
-   - engine
-   - coordinator/state
-   - screens/components
-4. Move user strings to `strings.xml`.
-5. Finalize UI polish + animation pass.
-6. Prepare signed release AAB with final upload key credentials and bump `versionCode`.
+1. Finalize UI polish + animation pass.
+2. Optionally migrate remaining core/domain text (challenge/store definitions and runtime info messages) into resources.
+3. Prepare signed release AAB with final upload key credentials and bump `versionCode`.
+
+## 10) Latest verification snapshot (2026-04-01)
+
+- Build-level validation completed successfully:
+  - `./gradlew :app:compileDebugKotlin`
+  - `./gradlew :app:assembleDebug`
+  - `./gradlew :app:testDebugUnitTest`
+- Debug APK generated at:
+  - `app/build/outputs/apk/debug/app-debug.apk`
+- Runtime smoke test validated on connected physical device:
+  - `adb devices` detected device in `device` state
+  - debug package validated as `com.hadify.NumberMerge2048.dev` (debug `applicationIdSuffix`)
+  - package had to be enabled for active user with `pm install-existing --user 0 com.hadify.NumberMerge2048.dev` before launch commands
+  - `adb install -r app/build/outputs/apk/debug/app-debug.apk` returned `Success`
+  - app launched and tested via package `com.hadify.NumberMerge2048.dev`
+  - 300 in-app monkey events completed without app crash
+  - `adb logcat -d AndroidRuntime:E ActivityManager:E *:S` returned no fatal runtime output
+  - app process remained alive and resumed on `com.hadify.NumberMerge2048.dev/com.hadify.NumberMerge2048.MainActivity`
+- Note:
+  - a MIUI `theme_config` `FileNotFoundException` appeared during monkey execution; this came from monkey/device theme internals and did not crash the app
+
+- Corrected rerun (after package mismatch report) completed:
+  - explicit launch succeeded: `com.hadify.NumberMerge2048.dev/com.hadify.NumberMerge2048.MainActivity`
+  - 300 monkey events executed against package `com.hadify.NumberMerge2048.dev`
+  - no AndroidRuntime/ActivityManager fatal crash output was observed
+  - app process remained alive and resumed on the same `.dev` MainActivity
+
+- Deterministic path-based smoke test completed on physical device:
+  - exact route validated: Home -> New Game -> Start New Game -> Game -> Store -> Home -> Daily Challenges -> Home -> How To Play
+  - each transition was asserted from live UI dump text (not random monkey only)
+  - app remained alive (`pidof com.hadify.NumberMerge2048.dev` returned active process)
+  - resumed activity stayed on `com.hadify.NumberMerge2048.dev/com.hadify.NumberMerge2048.MainActivity`
+  - no fatal `AndroidRuntime` / `ActivityManager` crash output observed after the route
+
+- Store logic and UX improvements completed (2026-04-01):
+  - removed the free coin exploit offer and replaced it with a priced utility offer (`Tune-Up Kit`, 22 coins, +1 Swap, +1 Undo)
+  - added coordinator-side guardrails:
+    - reject invalid/empty offers
+    - require active run for charge-based items
+    - block charge purchases when active run is already game-over
+    - improve purchase feedback message with clear cost/net coin impact
+  - improved store UI state handling:
+    - explicit message for run-ended state
+    - card-level warning text for run-ended charge purchases
+    - top-positioned status/result panel so purchase feedback is visible immediately
+  - runtime verification on physical device passed:
+    - no-run state: `Start Run` CTA shown and charge offers blocked
+    - active-run state: `Buy 22` shown for `Tune-Up Kit`
+    - purchase succeeded and wallet changed from 97 to 75
+    - purchase feedback text visible immediately after buying
+
+- UI audit + de-verbosity pass completed (2026-04-01):
+  - audited high-density copy areas in Home, Board Setup, Daily Challenges, How To Play, Store, and Game challenge panel
+  - shortened primary user-facing strings to reduce reading load and improve scan speed
+  - added compact challenge metadata string (`Chain: N stages`) to replace long chain titles in card view
+  - added line clamps/ellipsis on secondary text in Home action cards, Daily Challenges cards, Store cards, and Game challenge details
+  - runtime sanity check confirmed updated concise copy is visible on device (e.g., Home "Today" card + shorter action subtitles)
 
