@@ -1,12 +1,15 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">NumberMerge2048</string>
-    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
     <string name="common_back">Back</string>
     <string name="common_cancel">Cancel</string>
     <string name="common_store">Store</string>
     <string name="common_share">Share</string>
     <string name="common_back_press_again_to_exit">Press back again to exit</string>
+    <string name="share_chooser_title">Share Your Challenge</string>
+    <string name="share_invite_message_format">I just scored %1$d in NumberMerge2048 (%2$dx%3$d, %4$s). Think you can beat me? Take the challenge now!</string>
+    <string name="share_success_message">Screenshot ready. Challenge sent.</string>
+    <string name="share_failed_message">Could not share right now. Please try again.</string>
 
     <string name="home_logo">2048</string>
     <string name="home_brand_title">NumberMerge2048</string>

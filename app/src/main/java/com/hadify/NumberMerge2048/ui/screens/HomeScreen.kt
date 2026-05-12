@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -85,13 +87,12 @@ fun HomeScreen(
 					modifier = Modifier
 						.background(Color(0x33FFFFFF), RoundedCornerShape(14.dp))
 						.border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(14.dp))
-						.padding(horizontal = 20.dp, vertical = 10.dp),
+						.padding(horizontal = 10.dp, vertical = 10.dp),
 				) {
-					Text(
-						text = stringResource(R.string.home_logo),
-						color = Color.White,
-						style = MaterialTheme.typography.displaySmall,
-						fontWeight = FontWeight.Black,
+					Image(
+						painter = painterResource(id = R.drawable.brand_logo),
+						contentDescription = stringResource(R.string.home_brand_title),
+						modifier = Modifier.size(84.dp),
 					)
 				}
 				Text(

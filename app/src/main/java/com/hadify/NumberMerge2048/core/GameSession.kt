@@ -550,7 +550,17 @@ class GameSession(
     }
 
     fun onShareTapped() {
-        infoMessage = "Share will be enabled in the next update."
+        infoMessage = "Preparing your challenge screenshot..."
+        boardVersion++
+    }
+
+    fun postExternalInfoMessage(message: String, isError: Boolean = false) {
+        infoMessage = message
+        if (isError) {
+            emitSound(GameSoundEvent.ERROR)
+        } else {
+            emitSound(GameSoundEvent.MOVE)
+        }
         boardVersion++
     }
 

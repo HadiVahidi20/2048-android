@@ -1,5 +1,12 @@
 package com.hadify.NumberMerge2048
 
+import android.app.Activity
+import android.content.ClipData
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.net.Uri
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -51,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +79,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -85,6 +99,9 @@ fun GameScreen(
     soundEnabled: Boolean,
     onToggleSound: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val activity = context.findActivity()
+    val shareScope = rememberCoroutineScope()
     val toggleSoundDescription = stringResource(
         if (soundEnabled) R.string.game_mute_sound else R.string.game_enable_sound
     )
@@ -342,7 +359,33 @@ fun GameScreen(
                 Text(stringResource(R.string.common_store))
             }
             OutlinedButton(
-                onClick = session::onShareTapped,
+                onClick = {
+                    val shareText = context.getString(
+                        R.string.share_invite_message_format,
+                        session.score,
+                        session.size,
+                        session.size,
+                        session.difficulty.label,
+                    )
+                    session.onShareTapped()
+                    shareScope.launch {
+                        runCatching {
+                            captureAndShareGameScreenshot(
+                                activity = activity,
+                                context = context,
+                                chooserTitle = context.getString(R.string.share_chooser_title),
+                                shareText = shareText,
+                            )
+                        }.onSuccess {
+                            session.postExternalInfoMessage(context.getString(R.string.share_success_message))
+                        }.onFailure {
+                            session.postExternalInfoMessage(
+                                message = context.getString(R.string.share_failed_message),
+                                isError = true,
+                            )
+                        }
+                    }
+                },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(14.dp),
             ) {
@@ -382,6 +425,62 @@ fun GameScreen(
             },
         )
     }
+}
+
+private fun captureRootBitmap(activity: Activity): Bitmap {
+    val root = activity.window.decorView.rootView
+    if (root.width <= 0 || root.height <= 0) {
+        throw IllegalStateException("View is not ready for screenshot capture")
+    }
+    return Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bitmap ->
+        val canvas = Canvas(bitmap)
+        root.draw(canvas)
+    }
+}
+
+private suspend fun persistShareBitmap(
+    context: Context,
+    bitmap: Bitmap,
+): Uri = withContext(Dispatchers.IO) {
+    val shareDir = File(context.cacheDir, "share")
+    if (!shareDir.exists()) {
+        shareDir.mkdirs()
+    }
+    val file = File(shareDir, "numbermerge_${System.currentTimeMillis()}.png")
+    FileOutputStream(file).use { output ->
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+    }
+    FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file,
+    )
+}
+
+private suspend fun captureAndShareGameScreenshot(
+    activity: Activity?,
+    context: Context,
+    chooserTitle: String,
+    shareText: String,
+) {
+    val safeActivity = activity ?: throw IllegalStateException("No foreground activity for sharing")
+    val screenshot = captureRootBitmap(safeActivity)
+    val imageUri = try {
+        persistShareBitmap(context, screenshot)
+    } finally {
+        screenshot.recycle()
+    }
+
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "image/png"
+        putExtra(Intent.EXTRA_STREAM, imageUri)
+        putExtra(Intent.EXTRA_TEXT, shareText)
+        putExtra(Intent.EXTRA_SUBJECT, "NumberMerge2048 Challenge")
+        clipData = ClipData.newUri(context.contentResolver, "NumberMerge2048 screenshot", imageUri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+
+    safeActivity.startActivity(Intent.createChooser(intent, chooserTitle))
 }
 
 @Composable
@@ -758,27 +857,33 @@ private fun PowerUpButton(
         animationSpec = tween(220),
         label = "powerFg",
     )
+    val iconScale by animateFloatAsState(
+        targetValue = if (active) 1.08f else 1f,
+        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        label = "powerIconScale",
+    )
 
     Card(
         modifier = modifier
-            .height(62.dp)
+            .height(68.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(13.dp),
         colors = CardDefaults.cardColors(containerColor = background),
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
-            Column(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 7.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                    .fillMaxSize()
+                    .padding(horizontal = 6.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     painter = painterResource(id = iconRes),
                     contentDescription = contentLabel,
                     tint = contentColor,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier
+                        .size(31.dp)
+                        .scale(iconScale),
                 )
             }
 

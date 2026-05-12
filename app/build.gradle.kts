@@ -13,8 +13,11 @@ android {
         applicationId = "com.hadify.NumberMerge2048"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1000
-        versionName = "1.0.0-rebuild"
+        versionCode = 7
+        versionName = "1.0.4"
+        ndk {
+            debugSymbolLevel = "SYMBOL_TABLE"
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -26,6 +29,28 @@ android {
     val keystoreProps = Properties()
     if (keystorePropsFile.exists()) {
         keystorePropsFile.inputStream().use { keystoreProps.load(it) }
+    }
+
+    val localPropsFile = rootProject.file("local.properties")
+    val localProps = Properties()
+    if (localPropsFile.exists()) {
+        localPropsFile.inputStream().use { localProps.load(it) }
+    }
+
+    val testAdMobAppId = "ca-app-pub-3940256099942544~3347511713"
+    val releaseAdMobAppId =
+        (project.findProperty("ADMOB_APP_ID_RELEASE") as String?)
+            ?: localProps.getProperty("ADMOB_APP_ID_RELEASE")
+            ?: System.getenv("ADMOB_APP_ID_RELEASE")
+
+    val isReleaseTaskRequested = gradle.startParameter.taskNames.any {
+        it.contains("Release", ignoreCase = true)
+    }
+    if (isReleaseTaskRequested && releaseAdMobAppId.isNullOrBlank()) {
+        throw GradleException(
+            "Missing AdMob App ID for release. Set ADMOB_APP_ID_RELEASE in local.properties, " +
+                "gradle.properties, or environment variables."
+        )
     }
 
     signingConfigs {
@@ -43,6 +68,7 @@ android {
         getByName("debug") {
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
+            manifestPlaceholders["admobAppId"] = testAdMobAppId
         }
         getByName("release") {
             isMinifyEnabled = false
@@ -50,6 +76,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            manifestPlaceholders["admobAppId"] = releaseAdMobAppId ?: testAdMobAppId
             if (keystorePropsFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
