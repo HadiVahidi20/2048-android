@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(adb devices *)",
+      "PowerShell(Resolve-DnsName -Name hadify.app -Type NS -ErrorAction SilentlyContinue | Select-Object Name, NameHost; Write-Output \"---\"; \\(Resolve-DnsName -Name hadify.app -Type NS -Server 8.8.8.8 -ErrorAction SilentlyContinue | Where-Object { $_.NameHost } | Select-Object -ExpandProperty NameHost\\))"
+    ]
+  }
+}
