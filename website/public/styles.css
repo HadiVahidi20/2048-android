@@ -1,0 +1,86 @@
+/* Standalone styles for the static legal pages (/privacy, /terms).
+   Matches the NumberMerge 2048 game's dark + warm-gold palette. */
+:root {
+  --bg: #14131b;
+  --panel: #23202c;
+  --panel-soft: #2a2633;
+  --border: rgba(255, 255, 255, 0.10);
+  --text: #f6f2e9;
+  --muted: #c0b7aa;
+  --orange: #ffa938;
+  --gold: #f4d544;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: radial-gradient(1200px 600px at 50% -10%, #1c1825 0%, var(--bg) 55%);
+  color: var(--text);
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.65;
+}
+a { color: var(--orange); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.legal-header {
+  text-align: center;
+  padding: 56px 20px 24px;
+}
+.legal-header .logo {
+  width: 64px; height: 64px;
+  margin: 0 auto 16px;
+  display: grid; place-items: center;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #ffc65b, var(--orange));
+  box-shadow: 0 16px 40px -16px rgba(255, 169, 56, 0.7);
+}
+.legal-header .logo svg { width: 34px; height: 34px; }
+.legal-header h1 {
+  font-family: 'Sora', system-ui, sans-serif;
+  font-size: 28px; font-weight: 800; margin: 0;
+}
+.legal-header .sub { color: var(--muted); margin-top: 4px; font-size: 15px; }
+
+.pill-nav {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  justify-content: center; margin-top: 22px;
+}
+.pill-nav a {
+  padding: 8px 16px; border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text); font-size: 14px;
+}
+.pill-nav a:hover { background: rgba(255, 255, 255, 0.08); text-decoration: none; }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+.wrap.narrow { max-width: 780px; }
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 32px 28px;
+  margin: 24px 0 48px;
+}
+.card h2 {
+  font-family: 'Sora', system-ui, sans-serif;
+  font-size: 24px; margin: 0 0 4px;
+}
+.card h3 { font-size: 17px; margin: 26px 0 8px; }
+.card p, .card li { color: #e8e2d6; }
+.card ul { padding-left: 20px; }
+.card li { margin: 6px 0; }
+.muted { color: var(--muted); font-size: 14px; }
+
+footer.site {
+  border-top: 1px solid var(--border);
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+footer.site .row { margin-bottom: 8px; }
+footer.site a { color: var(--muted); }
+footer.site a:hover { color: var(--text); }
