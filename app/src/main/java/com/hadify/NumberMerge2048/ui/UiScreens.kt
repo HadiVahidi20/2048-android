@@ -71,12 +71,13 @@ import kotlin.math.abs
 private const val REWARDED_COIN_AMOUNT = 30
 
 @Composable
-fun NumberMergeApp() {
+fun NumberMergeApp(consentManager: ConsentManager) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val activity = context.findActivity()
     val coordinator = remember(appContext) { AppCoordinator(appContext) }
     val backPressAgainMessage = stringResource(R.string.common_back_press_again_to_exit)
+    val privacyOptionsUnavailableMessage = stringResource(R.string.settings_privacy_options_unavailable)
     var lastBackPressAt by remember { mutableStateOf(0L) }
     val rewardedAdController = remember(appContext) {
         RewardedAdController(
@@ -85,8 +86,12 @@ fun NumberMergeApp() {
         )
     }
 
-    LaunchedEffect(rewardedAdController) {
-        rewardedAdController.preload()
+    // Rewarded ads start loading only once consent allows ad requests.
+    val adsEnabled = AdsRuntime.adsEnabled
+    LaunchedEffect(rewardedAdController, adsEnabled) {
+        if (adsEnabled) {
+            rewardedAdController.preload()
+        }
     }
 
     BackHandler {
@@ -114,7 +119,30 @@ fun NumberMergeApp() {
                 onDailyChallenges = coordinator::openDailyChallenges,
                 onHowToPlay = coordinator::openHowToPlay,
                 onPowerupsStore = coordinator::openPowerupStore,
+                onSettings = coordinator::openSettings,
                 menuBannerAdUnitId = AdMobAdUnits.homeBanner(appContext),
+            )
+        }
+
+        AppScreen.SETTINGS -> {
+            SettingsScreen(
+                appVersion = BuildConfig.VERSION_NAME,
+                showPrivacyOptions = consentManager.privacyOptionsRequired,
+                onOpenPrivacyOptions = {
+                    if (activity == null) {
+                        Toast.makeText(context, privacyOptionsUnavailableMessage, Toast.LENGTH_SHORT).show()
+                    } else {
+                        consentManager.showPrivacyOptionsForm(activity) { formError ->
+                            if (formError != null) {
+                                Toast.makeText(context, privacyOptionsUnavailableMessage, Toast.LENGTH_SHORT).show()
+                            }
+                            if (consentManager.canRequestAds) {
+                                AdsRuntime.start(activity)
+                            }
+                        }
+                    }
+                },
+                onBack = { coordinator.navigateBack() },
             )
         }
 

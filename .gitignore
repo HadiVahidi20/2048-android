@@ -15,3 +15,5 @@ keystore/*.pem
 # Temporary files
 *.log
 *.hprof
+
+.kotlin/

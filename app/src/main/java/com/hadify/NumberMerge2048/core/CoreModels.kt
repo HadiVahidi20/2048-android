@@ -14,6 +14,7 @@ enum class AppScreen {
     DAILY_CHALLENGES,
     HOW_TO_PLAY,
     POWERUP_STORE,
+    SETTINGS,
 }
 
 enum class Direction {

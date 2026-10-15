@@ -262,6 +262,10 @@ class AppCoordinator(private val context: Context) {
         navigateTo(AppScreen.POWERUP_STORE)
     }
 
+    fun openSettings() {
+        navigateTo(AppScreen.SETTINGS)
+    }
+
     fun toggleSound() {
         soundEnabled = !soundEnabled
         audioEngine.enabled = soundEnabled

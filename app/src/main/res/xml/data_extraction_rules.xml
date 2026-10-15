@@ -1,5 +1,11 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ backup/transfer: only the player's game progress and settings. Ad SDK and
+     consent (UMP) caches stay on the device, so consent is asked again on a new device. -->
 <data-extraction-rules>
-    <cloud-backup />
-    <device-transfer />
+    <cloud-backup>
+        <include domain="sharedpref" path="number_merge_2048_state.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="number_merge_2048_state.xml" />
+    </device-transfer>
 </data-extraction-rules>

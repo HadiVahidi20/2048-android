@@ -4,16 +4,21 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.util.Log
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
@@ -56,36 +61,55 @@ fun Context.findActivity(): Activity? {
     return null
 }
 
+/**
+ * Anchored adaptive banner sized to the width it is given. Renders nothing until consent allows
+ * ad requests ([AdsRuntime.adsEnabled]). The AdView follows the screen lifecycle (pause/resume)
+ * and is destroyed when it leaves the composition or the width changes.
+ */
 @Composable
 fun AdMobBanner(
     adUnitId: String,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val config = LocalConfiguration.current
-    val adWidthDp = config.screenWidthDp.coerceAtLeast(320)
-    val adSize = remember(context, adWidthDp) {
-        AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, adWidthDp)
+    if (!AdsRuntime.adsEnabled) {
+        return
     }
 
-    val adView = remember(adUnitId, adSize) {
-        AdView(context).apply {
-            setAdSize(adSize)
-            this.adUnitId = adUnitId
-            loadAd(AdRequest.Builder().build())
+    BoxWithConstraints(modifier = modifier) {
+        val context = LocalContext.current
+        val adWidthDp = maxWidth.value.toInt()
+        val adView = remember(context, adUnitId, adWidthDp) {
+            AdView(context).apply {
+                setAdSize(AdSize.getLargeAnchoredAdaptiveBannerAdSize(context, adWidthDp))
+                this.adUnitId = adUnitId
+                loadAd(AdRequest.Builder().build())
+            }
+        }
+
+        val lifecycleOwner = LocalLifecycleOwner.current
+        DisposableEffect(adView, lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> adView.resume()
+                    Lifecycle.Event.ON_PAUSE -> adView.pause()
+                    else -> Unit
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+                adView.destroy()
+            }
+        }
+
+        // key(): a new AdView (after a width change) needs a new host view.
+        key(adView) {
+            AndroidView(
+                modifier = Modifier.fillMaxWidth(),
+                factory = { adView },
+            )
         }
     }
-
-    DisposableEffect(adView) {
-        onDispose {
-            adView.destroy()
-        }
-    }
-
-    AndroidView(
-        modifier = modifier,
-        factory = { adView },
-    )
 }
 
 class RewardedAdController(
@@ -99,7 +123,7 @@ class RewardedAdController(
         private set
 
     fun preload() {
-        if (ad != null || loading) {
+        if (!AdsRuntime.adsEnabled || ad != null || loading) {
             return
         }
 

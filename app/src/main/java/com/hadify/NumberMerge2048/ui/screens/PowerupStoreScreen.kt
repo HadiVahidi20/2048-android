@@ -445,7 +445,7 @@ private fun CoinChip(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "$",
+                text = stringResource(R.string.store_coin_label),
                 color = tint,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
@@ -477,7 +477,7 @@ private fun PriceChip(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "$",
+                text = stringResource(R.string.store_coin_label),
                 color = tint,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,

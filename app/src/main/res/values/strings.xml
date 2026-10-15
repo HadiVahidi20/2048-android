@@ -28,6 +28,16 @@
     <string name="home_how_to_play_subtitle">Quick rules</string>
     <string name="home_powerups_store">Store</string>
     <string name="home_powerups_store_subtitle">Buy charge packs</string>
+    <string name="home_settings">Settings</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_privacy_policy">Privacy policy</string>
+    <string name="settings_privacy_policy_subtitle">How we handle your data</string>
+    <string name="settings_privacy_options">Privacy options</string>
+    <string name="settings_privacy_options_subtitle">Review or change your ad choices</string>
+    <string name="settings_privacy_options_unavailable">Privacy options aren\'t available right now. Please try again later.</string>
+    <string name="settings_link_failed">No browser found to open the link.</string>
+    <string name="settings_version_format">Version %1$s</string>
 
     <string name="board_setup_title">New</string>
     <string name="board_setup_pick_style">Choose your board.</string>
@@ -59,7 +69,8 @@
     <string name="how_to_play_step_5">5. Bigger boards mean longer runs.</string>
 
     <string name="store_title">Store</string>
-    <string name="store_wallet">$</string>
+    <string name="store_wallet">Wallet</string>
+    <string name="store_coin_label">Coins</string>
     <string name="store_coins_format">Coins: %1$d</string>
     <string name="store_low_coins_title">Need coins</string>
     <string name="store_low_coins_subtitle_format">Short by %1$d. Watch ad.</string>
@@ -96,7 +107,7 @@
     <string name="game_stat_score">Score</string>
     <string name="game_stat_best">Best</string>
     <string name="game_stat_board">Board</string>
-    <string name="game_coins_compact">$ %1$d</string>
+    <string name="game_coins_compact">%1$d coins</string>
     <string name="game_board_difficulty_format">%1$dx%2$d | %3$s</string>
     <string name="game_challenge_title_format">Challenge | %1$s</string>
     <string name="game_power_swap">Swap</string>

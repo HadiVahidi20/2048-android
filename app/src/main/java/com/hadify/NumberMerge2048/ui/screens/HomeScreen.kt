@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Button
@@ -57,6 +58,7 @@ fun HomeScreen(
 	onDailyChallenges: () -> Unit,
 	onHowToPlay: () -> Unit,
 	onPowerupsStore: () -> Unit,
+	onSettings: () -> Unit,
 	menuBannerAdUnitId: String,
 ) {
 	val heroGradient = Brush.linearGradient(
@@ -194,6 +196,13 @@ fun HomeScreen(
 			onClick = onPowerupsStore,
 		)
 
+		HomeActionButton(
+			label = stringResource(R.string.home_settings),
+			color = Color(0xFF3F4A5C),
+			icon = Icons.Default.Settings,
+			onClick = onSettings,
+		)
+
 		if (!message.isNullOrBlank()) {
 			GlassPanel(accent = OrangePrimary) {
 				Text(
@@ -203,13 +212,15 @@ fun HomeScreen(
 			}
 		}
 
-		GlassPanel(accent = PanelBorder) {
-			AdMobBanner(
-				adUnitId = menuBannerAdUnitId,
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(vertical = 2.dp),
-			)
+		if (AdsRuntime.adsEnabled) {
+			GlassPanel(accent = PanelBorder) {
+				AdMobBanner(
+					adUnitId = menuBannerAdUnitId,
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(vertical = 2.dp),
+				)
+			}
 		}
 	}
 }

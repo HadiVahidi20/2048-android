@@ -1,9 +1,11 @@
 ﻿plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 android {
     namespace = "com.hadify.NumberMerge2048"
@@ -13,8 +15,8 @@ android {
         applicationId = "com.hadify.NumberMerge2048"
         minSdk = 24
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.0.4"
+        versionCode = 8
+        versionName = "1.0.5"
         ndk {
             debugSymbolLevel = "SYMBOL_TABLE"
         }
@@ -69,6 +71,9 @@ android {
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
             manifestPlaceholders["admobAppId"] = testAdMobAppId
+            // UMP consent debug geography (debug builds only, emulators/test devices):
+            // "EEA" = GDPR message (EEA/UK), "US_STATE" = US state privacy message, "" = real location.
+            buildConfigField("String", "UMP_DEBUG_GEOGRAPHY", "\"EEA\"")
         }
         getByName("release") {
             isMinifyEnabled = false
@@ -77,6 +82,8 @@ android {
                 "proguard-rules.pro"
             )
             manifestPlaceholders["admobAppId"] = releaseAdMobAppId ?: testAdMobAppId
+            // Never force a consent debug geography in release builds.
+            buildConfigField("String", "UMP_DEBUG_GEOGRAPHY", "\"\"")
             if (keystorePropsFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -88,22 +95,20 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
+        buildConfig = true
     }
 
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+
+    lint {
+        // PropertyEscape only flags the local, gitignored local.properties SDK path, not shipped code.
+        disable += "PropertyEscape"
     }
 }
 
@@ -122,7 +127,8 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
-    implementation("com.google.android.gms:play-services-ads:23.1.0")
+    implementation("com.google.android.gms:play-services-ads:25.5.0")
+    implementation("com.google.android.ump:user-messaging-platform:4.0.0")
 
     testImplementation("junit:junit:4.13.2")
 
@@ -132,4 +138,10 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
 }

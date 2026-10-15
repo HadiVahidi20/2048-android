@@ -13,7 +13,7 @@ export default function CTA() {
               <h2 className="display mx-auto mt-7 max-w-2xl text-[clamp(2rem,5vw,3.4rem)] font-800 leading-tight">
                 Chase the <span className="text-grad">2048</span> tile today.
               </h2>
-              <p className="mx-auto mt-5 max-w-md text-cream/60">Four power-ups, three board sizes, three difficulties and a new daily challenge — all free, all offline.</p>
+              <p className="mx-auto mt-5 max-w-md text-cream/60">Four power-ups, three board sizes, three difficulties and a new daily challenge — all free, and playable offline.</p>
               <div className="mt-9 flex flex-wrap justify-center gap-3">
                 <PlayButton />
                 <a href="#features" className="btn btn-ghost">See the power-ups</a>

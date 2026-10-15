@@ -7,7 +7,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Typography
@@ -22,13 +25,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.google.android.gms.ads.MobileAds
 
 class MainActivity : ComponentActivity() {
+	private lateinit var consentManager: ConsentManager
+
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		configureImmersiveMode()
-		MobileAds.initialize(this)
+
+		// Ads only start once the UMP consent flow allows it (GDPR in the EEA/UK, US state privacy
+		// laws in the US). The Mobile Ads SDK is not initialized and no ad is requested before that.
+		consentManager = ConsentManager(this)
+		consentManager.gatherConsent(this) {
+			if (consentManager.canRequestAds) {
+				AdsRuntime.start(this)
+			}
+		}
+		// Consent given in an earlier session lets ads start while the status refresh runs.
+		if (consentManager.canRequestAds) {
+			AdsRuntime.start(this)
+		}
+
 		setContent {
 			NumberMergeTheme {
 				Surface(
@@ -37,7 +54,7 @@ class MainActivity : ComponentActivity() {
 					contentColor = TextPrimary,
 				) {
 					AppBackgroundLayer {
-						NumberMergeApp()
+						NumberMergeApp(consentManager = consentManager)
 					}
 				}
 			}
@@ -148,7 +165,16 @@ private fun AppBackgroundLayer(content: @Composable () -> Unit) {
 					)
 				)
 		)
-		content()
+		// Edge-to-edge (targetSdk 36): the background is drawn behind the system bars, but the UI
+		// (including the bottom banners) stays clear of the navigation bar, status bar and cutouts
+		// whenever they are visible.
+		Box(
+			modifier = Modifier
+				.fillMaxSize()
+				.windowInsetsPadding(WindowInsets.safeDrawing),
+		) {
+			content()
+		}
 	}
 }
 
